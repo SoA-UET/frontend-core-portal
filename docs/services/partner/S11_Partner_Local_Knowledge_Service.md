@@ -164,43 +164,50 @@ This service exposes the following APIs:
 
 ## Database Schema (MongoDB)
 
-Database: `telcenter_partner_s11`
+Database: `telcenter_partner_knowledge`
 
-Collections:
+### Collection: `packages` (Gói cước local)
 
-- `partner_knowledge`
-    - Purpose: canonical local knowledge records for the partner
-    - Fields:
-        - `_id` (ObjectId)
-        - `partner_id` (string)
-        - `record_id` (string)
-        - `data` (object) - structured fields for the service
-        - `embeddings_ref` (string|null)
-        - `version` (int)
-        - `approved` (bool)
-        - `source_file_reference` (object|null) - SeaweedFS reference
-        - `created_at`, `updated_at`
-    - Indexes: `{partner_id:1}`, `{record_id:1}`, `{"data.service_code":1}`
+Lưu thông tin các gói cước viễn thông của Partner này.
 
-- `partner_staging`
-    - Purpose: staging area for newly imported or updated records awaiting approval
-    - Fields:
-        - `_id`, `staging_id`, `partner_id`, `extracted_records` (array), `status` (staged|reviewed|approved|rejected), `submitted_by`, `file_reference`, `created_at`
-    - Indexes: `{staging_id:1}`, `{status:1}`
+| Tên trường | Kiểu dữ liệu | Ràng buộc | Mô tả |
+|------------|--------------|-----------|-------|
+| `id` | INT | PK, Auto Increment | ID gói cước |
+| `partner_id` | INT | FK partners | Gói cước thuộc nhà mạng nào |
+| `code` | VARCHAR(50) | Index, Not Null | Mã gói (VD: V120, D500) |
+| `meta_data` | TEXT | NOT NULL | String JSON thông tin gói cước |
 
-- `import_tasks`
-    - Purpose: track file import processing and status (interacts with S15)
-    - Fields: `_id`, `task_id`, `file_reference`, `a32_staging_id`, `status`, `logs`, `created_at`, `completed_at`
+### Collection: `faqs` (Câu hỏi thường gặp local)
 
-Sample `partner_staging` document:
+Lưu các câu hỏi và câu trả lời của Partner này.
+
+| Tên trường | Kiểu dữ liệu | Ràng buộc | Mô tả |
+|------------|--------------|-----------|-------|
+| `id` | INT | PK, Auto Increment | ID câu hỏi |
+| `partner_id` | INT | FK partners | Kiến thức này của nhà mạng nào |
+| `question` | TEXT | Not Null | Nội dung câu hỏi |
+| `answer` | TEXT | Not Null | Nội dung câu trả lời chuẩn |
+| `category` | VARCHAR(50) | Nullable | Phân loại (Kỹ thuật, Cước phí...) |
+
+Sample `packages` document:
 
 ```json
 {
-    "staging_id": "stg_20251208_002",
-    "partner_id": "viettel_partner_001",
-    "extracted_records": [{"service_code":"SD70","price":70000}],
-    "status": "staged",
-    "file_reference": {"storage":"seaweed","file_id":"fid123","file_url":"https://seaweed.master:9333/fid123"},
-    "created_at": "2025-12-08T10:55:00Z"
+    "id": 1,
+    "partner_id": 1,
+    "code": "SD70",
+    "meta_data": "{\"payment_type\":\"Trả trước\",\"price\":70000,\"cycle_days\":30,\"data_standard_per_day\":1,\"auto_renew\":true,\"registration_syntax\":\"SD70 DK8 gửi 290\"}"
+}
+```
+
+Sample `faqs` document:
+
+```json
+{
+    "id": 1,
+    "partner_id": 1,
+    "question": "Làm sao để kiểm tra số dư?",
+    "answer": "Bấm *101# để kiểm tra số dư tài khoản.",
+    "category": "Cước phí"
 }
 ```

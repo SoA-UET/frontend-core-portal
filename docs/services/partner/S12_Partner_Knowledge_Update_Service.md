@@ -78,19 +78,19 @@ a `.env.example` file for that.
 
 ### Flow 1: Submit Knowledge Update (from H29)
 
-1. **Receive Update Request** (via H29): Partner Portal submits a knowledge update request containing new or modified telecom service information (could be manually entered or from processed file imports)
+1. **Receive Update Request** (via H29): Partner Portal submits a knowledge update request. Note that the request does not contain the data itself, but triggers a validation of the current local knowledge.
 
 2. **Authenticate Request**: Verify the requesting partner employee's credentials and permissions
 
-3. **Validate Input Format**: Check that the knowledge data is properly structured (dataframe format with required fields)
+3. **Export Local Knowledge** (via A33): Request S11 to dump the current local knowledge database to a JSON file and upload it to SeaweedFS. S11 returns a `file_id`.
 
-4. **Forward to Core Validation** (via A34): Send the knowledge update to S05 Knowledge Validator Service in Telcenter Core for validation
+4. **Send to Core for Validation** (via A34): Send the `file_id` to S05 Knowledge Validator Service in Telcenter Core for validation.
 
-5. **Receive Validation Result** (via A34 response): Get validation status from Core (success/failure with reasons)
+5. **Receive Validation Result** (via A34 response): Get validation status from Core. Note that Core either approves the entire update or rejects it completely (no partial approval).
 
-6. **On Validation Success - Update Local Knowledge** (via A33): If validated successfully, send the approved knowledge to S11 to update Partner Local Knowledge DB
+6. **On Validation Success - Update Local Knowledge** (via A33): If validated successfully, send the approved knowledge (via `file_id`) to S11 to update Partner Local Knowledge DB.
 
-7. **Receive Update Confirmation** (via A33 response): Get acknowledgment from S11 that local knowledge has been updated
+7. **Receive Update Confirmation** (via A33 response): Get acknowledgment from S11 that local knowledge has been updated.
 
 8. **Send Metrics** (via A16): Report update metrics to S14 Partner Metrics Service
 
@@ -140,39 +140,28 @@ This service exposes the following APIs:
 
 Database: `telcenter_partner_s12`
 
-Collections:
+### Collection: `submissions`
 
-- `update_drafts`
-    - Purpose: store partner-created drafts before submission to Core
-    - Fields:
-        - `_id` (ObjectId)
-        - `draft_id` (string)
-        - `partner_id` (string)
-        - `proposer_id` (string)
-        - `changes` (array/object) - proposed record changes
-        - `status` (string) - `draft` | `submitted` | `withdrawn`
-        - `file_reference` (object|null) - SeaweedFS reference if draft came from file
-        - `created_at`, `updated_at`
-    - Indexes: `{partner_id:1}`, `{status:1}`
+Theo dõi các lần submit knowledge lên Core để validate.
 
-- `update_submissions`
-    - Purpose: track submissions sent to Core (S05)
-    - Fields:
-        - `_id`, `submission_id`, `draft_id`, `core_request_id`, `core_response`, `core_validation_status`, `sent_at`, `response_at`
-    - Indexes: `{submission_id:1}`, `{core_validation_status:1}`
+| Tên trường | Kiểu dữ liệu | Mô tả |
+|------------|--------------|-------|
+| `_id` | ObjectId | Primary key |
+| `seaweed_file_id` | string | ID file JSON trên SeaweedFS |
+| `status` | string | `pending` / `validated` / `rejected` |
+| `submitted_at` | datetime | Thời gian gửi lên Core |
+| `response_at` | datetime | Thời gian nhận kết quả |
+| `result_message` | string | Thông báo kết quả từ Core |
 
-- `audit_logs`
-    - Purpose: store action logs for compliance and traceability
-    - Fields: `_id`, `actor_id`, `action`, `target_id`, `details`, `timestamp`
-
-Sample `update_submissions` document:
+Sample document:
 
 ```json
 {
-    "submission_id": "sub_20251208_001",
-    "draft_id": "draft_1001",
-    "core_request_id": "req_abc123",
-    "core_validation_status": "pending",
-    "sent_at": "2025-12-08T11:00:00Z"
+    "_id": "ObjectId(...)",
+    "seaweed_file_id": "3,01234567",
+    "status": "validated",
+    "submitted_at": "2025-12-08T11:00:00Z",
+    "response_at": "2025-12-08T11:05:00Z",
+    "result_message": "Validated successfully"
 }
 ```

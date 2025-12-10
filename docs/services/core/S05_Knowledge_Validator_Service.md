@@ -166,55 +166,32 @@ This service exposes the following APIs:
 
 Database: `telcenter_core_s05`
 
-Collections:
+### Collection: `validation_tasks`
 
-- `validated_knowledge`
-    - Purpose: store final validated knowledge records sent to S03 and used for audit/history.
-    - Fields:
-        - `_id` (ObjectId)
-        - `staging_id` (string) - reference to staging input
-        - `partner_id` (string|null)
-        - `records` (array of objects) - validated records (structured fields)
-        - `status` (string) - `validated` | `rejected` | `pending`
-        - `validated_at` (datetime)
-        - `validator_id` (string)
-        - `confidence_scores` (object) - per-field confidence when available
-        - `source_file_reference` (object) - SeaweedFS file_reference when applicable
-        - `created_at`, `updated_at` (datetime)
-    - Indexes:
-        - `{staging_id: 1}`
-        - `{partner_id: 1}`
-        - `{validated_at: -1}`
+Theo dõi các tác vụ validation và lịch sử.
 
-- `validation_tasks`
-    - Purpose: track validation jobs and their lifecycle
-    - Fields:
-        - `_id` (ObjectId)
-        - `task_id` (string)
-        - `staging_id` (string)
-        - `status` (string) - `queued` | `running` | `failed` | `completed`
-        - `attempts` (int)
-        - `last_error` (string)
-        - `logs` (array of strings)
-        - `created_at`, `updated_at`
-    - Indexes: `{task_id:1}`, `{status:1}`
+| Tên trường | Kiểu dữ liệu | Mô tả |
+|------------|--------------|-------|
+| `_id` | ObjectId | Primary key |
+| `seaweed_file_id` | string | ID file JSON trên SeaweedFS (dữ liệu đầu vào) |
+| `partner_id` | string/null | Partner gửi request (null nếu từ Core Portal) |
+| `status` | string | `pending` / `validated` / `rejected` |
+| `validator_id` | string | ID người/service thực hiện validate |
+| `result_message` | string | Thông báo kết quả |
+| `created_at` | datetime | Thời gian tạo |
+| `validated_at` | datetime | Thời gian hoàn thành validate |
 
-- `validators`
-    - Purpose: lightweight user/service registry for validators
-    - Fields: `_id`, `validator_id`, `name`, `email`, `role`, `active` (bool)
-
-Sample `validated_knowledge` document:
+Sample document:
 
 ```json
 {
     "_id": "ObjectId(...)",
-    "staging_id": "stg_20251208_001",
+    "seaweed_file_id": "3,01234567",
     "partner_id": "viettel_partner_001",
-    "records": [{"service_code":"SD70","price":70000,...}],
     "status": "validated",
-    "validated_at": "2025-12-08T10:45:00Z",
     "validator_id": "validator_jane",
-    "source_file_reference": {"storage":"seaweed","file_id":"fid123","file_url":"https://seaweed.master:9333/fid123"},
-    "created_at": "2025-12-08T10:30:00Z"
+    "result_message": "Validated 15 packages, 20 FAQs successfully",
+    "created_at": "2025-12-08T10:30:00Z",
+    "validated_at": "2025-12-08T10:45:00Z"
 }
 ```

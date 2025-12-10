@@ -135,48 +135,50 @@ This service exposes the following APIs:
 
 ## Database Schema (MongoDB)
 
-Database: `telcenter_core_s03`
+Database: `telcenter_core_knowledge`
 
-Collections:
+### Collection: `packages` (Gói cước)
 
-- `knowledge_documents`
-    - Purpose: store canonical telecom service documents and records (structured data used by S02 and search)
-    - Fields:
-        - `_id` (ObjectId)
-        - `document_id` (string) - UUID or business id
-        - `title` (string)
-        - `content` (object) - structured fields, e.g., service_code, price, cycle, description
-        - `embeddings_ref` (string|null) - reference to vector embeddings in Chroma or storage
-        - `version` (int)
-        - `status` (string) - `active` | `deprecated` | `draft`
-        - `source` (object) - origin info (partner/core, source_file_reference)
-        - `created_by`, `approved_by`, `created_at`, `approved_at`, `updated_at`
-    - Indexes:
-        - `{document_id: 1}`
-        - `{"content.service_code": 1}`
-        - `{status:1}`
+Lưu thông tin các gói cước viễn thông từ tất cả các Partner.
 
-- `knowledge_versions`
-    - Purpose: versioned change history for documents
-    - Fields: `_id`, `document_id`, `version`, `changes` (diff), `changed_by`, `changed_at`
-    - Indexes: `{document_id:1, version:-1}`
+| Tên trường | Kiểu dữ liệu | Ràng buộc | Mô tả |
+|------------|--------------|-----------|-------|
+| `id` | INT | PK, Auto Increment | ID gói cước |
+| `partner_id` | INT | FK partners | Gói cước thuộc nhà mạng nào |
+| `code` | VARCHAR(50) | Index, Not Null | Mã gói (VD: V120, D500) |
+| `meta_data` | TEXT | NOT NULL | String JSON thông tin gói cước |
 
-- `knowledge_sources`
-    - Purpose: registry of sources (partner, file imports, external feeds)
-    - Fields: `_id`, `source_id`, `type` (partner|file|manual), `reference` (e.g., file_reference), `ingested_at`
+### Collection: `faqs` (Câu hỏi thường gặp)
 
-Sample `knowledge_documents` document:
+Lưu các câu hỏi và câu trả lời từ tất cả các Partner.
+
+| Tên trường | Kiểu dữ liệu | Ràng buộc | Mô tả |
+|------------|--------------|-----------|-------|
+| `id` | INT | PK, Auto Increment | ID câu hỏi |
+| `partner_id` | INT | FK partners | Kiến thức này của nhà mạng nào |
+| `question` | TEXT | Not Null | Nội dung câu hỏi |
+| `answer` | TEXT | Not Null | Nội dung câu trả lời chuẩn |
+| `category` | VARCHAR(50) | Nullable | Phân loại (Kỹ thuật, Cước phí...) |
+
+Sample `packages` document:
 
 ```json
 {
-    "_id": "ObjectId(...)",
-    "document_id": "doc_service_SD70",
-    "title": "Gói cước SD70",
-    "content": {"service_code":"SD70","price":70000,"cycle_days":30,"description":"..."},
-    "embeddings_ref": "chroma:embedding_doc_service_SD70",
-    "version": 3,
-    "status": "active",
-    "source": {"type":"partner","partner_id":"viettel_partner_001","file_reference":{"storage":"seaweed","file_id":"fid123"}},
-    "created_at": "2025-12-08T10:50:00Z"
+    "id": 1,
+    "partner_id": 1,
+    "code": "SD70",
+    "meta_data": "{\"payment_type\":\"Trả trước\",\"price\":70000,\"cycle_days\":30,\"data_standard_per_day\":1,\"auto_renew\":true,\"registration_syntax\":\"SD70 DK8 gửi 290\"}"
+}
+```
+
+Sample `faqs` document:
+
+```json
+{
+    "id": 1,
+    "partner_id": 1,
+    "question": "Làm sao để kiểm tra số dư?",
+    "answer": "Bấm *101# để kiểm tra số dư tài khoản.",
+    "category": "Cước phí"
 }
 ```
