@@ -57,116 +57,220 @@ The default queue names will be specified for
 each such API. The queue names should be configurable
 via `.env`, too.
 
-## Peer Service APIs
+## Environment Configuration
 
-Note that the base URL to call the services
+Note that the base URLs to call peer services
 must be specified via `.env`. Construct
 a `.env.example` file for that.
 
-### **Core's Partner Management Service (S07)**
-
-[H11](../../api_groups/H11.md)
-
-### **Authorized Core Gateway Service**
-
-[A12](../../api_groups/A12.md)
-
-### **Partner Portal**
-
-[H25](../../api_groups/H25.md)
-[H26](../../api_groups/H26.md)
+Required environment variables:
+- `PARTNER_INFO_DB_HOST`: MySQL/MariaDB host for partner database
+- `PARTNER_INFO_DB_PORT`: Database port
+- `PARTNER_INFO_DB_NAME`: Database name (`telcenter_partner_local`)
+- `PARTNER_INFO_DB_USER`: Database user
+- `PARTNER_INFO_DB_PASSWORD`: Database password
+- `RABBITMQ_HOST`: RabbitMQ server host
+- `RABBITMQ_PORT`: RabbitMQ server port
+- `RABBITMQ_USER`: RabbitMQ username
+- `RABBITMQ_PASSWORD`: RabbitMQ password
+- `A12_REQUEST_QUEUE`: RabbitMQ queue name for A12 requests (default: `partner_core_gateway_requests`)
+- `A12_RESPONSE_QUEUE`: RabbitMQ queue name for A12 responses (default: `partner_core_gateway_responses`)
+- `CORE_S07_BASE_URL`: Base URL for Core's Partner Management Service (S07)
+- `FLASK_HOST`: Host for Flask HTTP API (default: `0.0.0.0`)
+- `FLASK_PORT`: Port for Flask HTTP API (default: `5000`)
+- `FILE_UPLOAD_MAX_SIZE`: Maximum file size for logo uploads (default: `5242880` = 5MB)
+- `CDN_BASE_URL`: CDN URL for storing uploaded logos
 
 ## The Flow
 
-## Database Schema
+### Flow 1: Get Partner Information (via H25 GET)
 
-This service directly interacts with the **Partner General Information DB** database. It manages three main tables.
+1. **Receive Partner Info Request** (via H25 GET /api/partner/info): Partner Portal requests current partner general information
 
-### Table: `partner_info`
+2. **Authenticate Request**: Verify the requesting user's session/token is valid
 
-**Storage Location**: Telcenter Partner - Partner General Information DB
+3. **Query Database**: Retrieve partner information from the `partner_info` table
 
-**Purpose**: Store general information about this partner organization (the telecom company).
+4. **Return Partner Information**: Send back partner details including partner_id, name, domain, logo URL, contact info, address, description, and timestamps
 
-| Tên trường | Kiểu dữ liệu | Ràng buộc (Constraints) | Mô tả |
-|:-----------|:-------------|:------------------------|:------|
-| id | VARCHAR(50) | PK | ID định danh nhà mạng (e.g., "partner_viettel") - Partner identifier |
-| partner_name | VARCHAR(255) | NOT NULL | Tên nhà mạng (VD: "Viettel Telecom") - Official partner name |
-| partner_domain | VARCHAR(255) | UNIQUE, NOT NULL | Domain của nhà mạng (VD: "viettel.com.vn") - Partner's domain |
-| partner_logo_url | VARCHAR(500) | Nullable | URL logo của nhà mạng - URL to partner's logo image |
-| contact_email | VARCHAR(255) | NOT NULL | Email liên hệ (VD: "support@viettel.com.vn") - Contact email |
-| contact_phone | VARCHAR(50) | NOT NULL | Số điện thoại (VD: "18008098") - Contact phone |
-| address | TEXT | Nullable | Địa chỉ trụ sở - Main office address |
-| description | TEXT | Nullable | Mô tả về nhà mạng - Partner description |
-| capabilities_json | TEXT | Nullable | JSON string về khả năng (services, features, payment methods, regions, languages) |
-| max_concurrent_sessions | INT | Default 100 | Số phiên tối đa có thể xử lý - Maximum concurrent sessions |
-| api_version | VARCHAR(20) | Default "1.0.0" | Phiên bản API - API version |
-| status | ENUM | Default "active" | Trạng thái: "active", "inactive", "maintenance" - System status |
-| created_at | TIMESTAMP | Default NOW() | Thời điểm tạo |
-| updated_at | TIMESTAMP | Default NOW(), On Update NOW() | Thời điểm cập nhật |
+If it fails at any stage, the whole process fails. That is, immediately return error with the appropriate error message.
 
-**Indexes:**
-- Primary key on `id`
-- Unique index on `partner_domain`
-- Index on `status`
+### Flow 2: Update Partner Information (via H25 PUT)
 
-### Table: `core_connection_config`
+1. **Receive Partner Update Request** (via H25 PUT /api/partner/info): Partner Portal submits updated partner information (name, domain, contact email, phone, address, description)
 
-**Storage Location**: Telcenter Partner - Partner General Information DB
+2. **Authenticate Request**: Verify the requesting user has admin privileges
+   - If not authorized: Return error `"Unauthorized: Admin privileges required"`
 
-**Purpose**: Store configuration for connecting to Telcenter Core system.
+3. **Validate Request Data**: Check that required fields are present and properly formatted
+   - If missing fields: Return error `"Missing required fields: [field_names]"`
 
-| Tên trường | Kiểu dữ liệu | Ràng buộc (Constraints) | Mô tả |
-|:-----------|:-------------|:------------------------|:------|
-| id | INT | PK, Auto Increment | ID cấu hình - Configuration ID |
-| core_url | VARCHAR(500) | NOT NULL | URL của Core (VD: "https://core.telcenter.vn") - Core URL |
-| api_key | VARCHAR(255) | NOT NULL | API key để xác thực - API key for auth (stored encrypted) |
-| connection_status | ENUM | Default "inactive" | Trạng thái: "active", "inactive", "failed" - Connection status |
-| last_tested_at | TIMESTAMP | Nullable | Thời điểm test gần nhất - Last test timestamp |
-| last_test_result | ENUM | Nullable | Kết quả test: "success", "failed" - Last test result |
-| last_test_error | TEXT | Nullable | Thông báo lỗi nếu failed - Error message from last failed test |
-| response_time_ms | INT | Nullable | Thời gian phản hồi (ms) - Response time of last test |
-| core_version | VARCHAR(50) | Nullable | Phiên bản Core - Detected Core version |
-| created_at | TIMESTAMP | Default NOW() | Thời điểm tạo |
-| updated_at | TIMESTAMP | Default NOW(), On Update NOW() | Thời điểm cập nhật |
+4. **Check Domain Uniqueness**: Verify the partner_domain is not already used by another partner
+   - If duplicate: Return error `"Partner domain already exists"`
 
-**Indexes:**
-- Primary key on `id`
-- Index on `connection_status`
-- Index on `last_tested_at`
+5. **Update Database**: Update the partner information in the `partner_info` table with new values and set updated_at timestamp
 
-**Business Rules:**
-1. Chỉ nên có một active Core connection configuration tại một thời điểm
-2. API key phải được mã hóa khi lưu trữ (encryption at rest)
-3. Connection test phải thành công trước khi cho phép lưu configuration (TP-06)
-4. Nên có automatic periodic health checks để cập nhật `last_tested_at`
+6. **Return Success Response**: Send back the updated partner information
 
-### Table: `partner_health_log`
+If it fails at any stage, the whole process fails. That is, immediately return error with the appropriate error message.
 
-**Storage Location**: Telcenter Partner - Partner General Information DB
+### Flow 3: Upload Partner Logo (via H25 POST)
 
-**Purpose**: Track partner system health and connection status over time (for monitoring).
+1. **Receive Logo Upload Request** (via H25 POST /api/partner/logo): Partner Portal uploads a new logo image file
 
-| Tên trường | Kiểu dữ liệu | Ràng buộc (Constraints) | Mô tả |
-|:-----------|:-------------|:------------------------|:------|
-| id | BIGINT | PK, Auto Increment | ID log entry |
-| check_type | ENUM | NOT NULL | Loại kiểm tra: "core_connection", "system_health", "capacity" |
-| status | ENUM | NOT NULL | Kết quả: "healthy", "degraded", "unhealthy" |
-| current_active_sessions | INT | Default 0 | Số phiên đang active - Current active sessions count |
-| response_time_ms | INT | Nullable | Thời gian phản hồi (nếu test kết nối) - Response time |
-| error_message | TEXT | Nullable | Thông báo lỗi nếu có - Error message if check failed |
-| created_at | TIMESTAMP | Default NOW() | Thời điểm kiểm tra - Check timestamp |
+2. **Authenticate Request**: Verify the requesting user has admin privileges
+   - If not authorized: Return error `"Unauthorized: Admin privileges required"`
 
-**Indexes:**
-- Primary key on `id`
-- Index on `check_type`
-- Index on `created_at` (for time-series queries)
-- Index on `status`
+3. **Validate File**: Check the uploaded file meets requirements
+   - If file too large: Return error `"File size too large. Maximum size is 5MB"`
+   - If invalid format: Return error `"Invalid file format. Supported formats: PNG, JPG, SVG"`
+   - If corrupted: Return error `"Invalid or corrupted image file"`
 
-**Business Rules:**
-1. Health checks nên chạy định kỳ (e.g., mỗi 5 phút)
-2. Old logs nên được archive hoặc xóa sau retention period (e.g., 90 ngày)
-3. Status "degraded" hoặc "unhealthy" nên trigger alerts cho admins
+4. **Process Image**: Validate and optionally resize/optimize the image
+
+5. **Upload to CDN**: Store the logo file on CDN or file storage system
+
+6. **Update Database**: Save the new logo URL to the `partner_info` table
+
+7. **Return Success Response**: Send back the new logo URL and upload timestamp
+
+If it fails at any stage, the whole process fails. That is, immediately return error with the appropriate error message.
+
+### Flow 4: Get Core Connection Configuration (via H26 GET)
+
+1. **Receive Connection Info Request** (via H26 GET /api/partner/core-connection): Partner Portal requests current Core connection configuration
+
+2. **Authenticate Request**: Verify the requesting user has admin privileges
+   - If not authorized: Return error `"Unauthorized: Admin privileges required"`
+
+3. **Query Database**: Retrieve Core connection information from the `core_connection` table
+   - If not configured: Return error `"No core connection configured"`
+
+4. **Return Connection Configuration**: Send back core_url, api_key (masked for security), connection_status, last test results, and timestamps
+
+If it fails at any stage, the whole process fails. That is, immediately return error with the appropriate error message.
+
+### Flow 5: Test Core Connection (via H26 POST)
+
+1. **Receive Connection Test Request** (via H26 POST /api/partner/core-connection/test): Partner Portal submits Core URL and API key for testing
+
+2. **Authenticate Request**: Verify the requesting user has admin privileges
+   - If not authorized: Return error `"Unauthorized: Admin privileges required"`
+
+3. **Validate Input**: Check that core_url and api_key are provided and properly formatted
+
+4. **Attempt Connection** (via H11): Call Core's Partner Management Service to verify the connection
+   - Measure response time
+   - Verify API key authentication
+   - Check Core service availability
+
+5. **Handle Connection Results**:
+   - If connection successful: Return success with connection_status "active", response_time_ms, core_version, and tested_at
+   - If URL unreachable: Return error `"Cannot connect to Core: Invalid URL or server unreachable"`
+   - If API key invalid: Return error `"Authentication failed: Invalid API key"`
+   - If API key expired: Return error `"Authentication failed: API key has expired"`
+   - If timeout: Return error `"Connection timeout after 30 seconds"`
+   - If Core error: Return error `"Core server error: [error details]"`
+
+6. **Update Test Record**: Store the test result and timestamp in database
+
+If it fails at any stage, return the appropriate error response.
+
+### Flow 6: Save Core Connection Configuration (via H26 PUT)
+
+1. **Receive Connection Save Request** (via H26 PUT /api/partner/core-connection): Partner Portal submits Core URL and API key to save
+
+2. **Authenticate Request**: Verify the requesting user has admin privileges
+   - If not authorized: Return error `"Unauthorized: Admin privileges required"`
+
+3. **Validate Request Data**: Check that required fields are present
+   - If missing fields: Return error `"Missing required fields: [field_names]"`
+   - If invalid URL format: Return error `"Invalid Core URL format"`
+   - If invalid API key format: Return error `"Invalid API key format"`
+
+4. **Verify Recent Successful Test**: Check that a recent successful connection test was performed
+   - If no recent test: Return error `"Cannot save: Connection test must be successful before saving"`
+
+5. **Save to Database**: Insert or update the Core connection configuration in the `core_connection` table
+
+6. **Update Connection Status**: Set connection_status to "active" and record updated_at timestamp
+
+7. **Return Success Response**: Send back the saved configuration
+
+If it fails at any stage, the whole process fails. That is, immediately return error with the appropriate error message.
+
+### Flow 7: Query Core Service Endpoint (via A12 RabbitMQ)
+
+1. **Receive Core Service Endpoint Query** (via A12 get_core_service_endpoint): Authorized Core Gateway Service (S17) requests the endpoint URL of a specific Core service
+
+2. **Parse Service Identifier**: Extract the service_identifier from the request (e.g., "consultant", "knowledge", "metrics", "portal")
+
+3. **Retrieve Core Configuration**: Load the Core connection configuration from the `core_connection` table
+
+4. **Query Service Catalog**: Look up the specific service endpoint based on service_identifier
+   - If service not found: Return error `"Service not found"`
+
+5. **Verify Service Availability**: Check that the service is currently available
+   - If unavailable: Return error `"Service unavailable"`
+
+6. **Return Service Endpoint**: Send back service_id, service_name, endpoint_url, api_version, status, and last_health_check timestamp
+
+If it fails at any stage, return the appropriate error response via RabbitMQ.
+
+### Flow 8: Query Core Main Endpoint (via A12 RabbitMQ)
+
+1. **Receive Core Main Endpoint Query** (via A12 get_core_main_endpoint): Authorized Core Gateway Service (S17) requests the main Core system endpoint
+
+2. **Retrieve Core Configuration**: Load the Core connection configuration from the `core_connection` table
+   - If Core unavailable: Return error `"Core unavailable"`
+
+3. **Query Gateway Information**: Retrieve the main Core endpoint and gateway URLs
+
+4. **Verify Core Status**: Check that the Core system is currently responding
+   - If timeout: Return error `"Gateway timeout"`
+
+5. **Return Core Main Endpoint**: Send back core_name, main_endpoint_url, gateway_url, api_version, status, supported_protocols, and last_health_check timestamp
+
+If it fails at any stage, return the appropriate error response via RabbitMQ.
+
+### Flow 9: List Available Core Services (via A12 RabbitMQ)
+
+1. **Receive Core Services List Request** (via A12 list_available_core_services): Authorized Core Gateway Service (S17) requests a list of all available Core services
+
+2. **Authenticate Partner**: Verify the partner is authorized to query Core services
+   - If not authorized: Return error `"Authentication required"`
+
+3. **Retrieve Core Configuration**: Load the Core connection configuration from the `core_connection` table
+
+4. **Query Service Registry**: Retrieve all available Core services from the service catalog
+   - If no services: Return error `"No services available"`
+   - If connection error: Return error `"Gateway connection error"`
+
+5. **Build Services List**: Construct an array of service objects, each containing service_id, service_name, endpoint_url, and status
+
+6. **Return Services List**: Send back the services array, total_count, and timestamp
+
+If it fails at any stage, return the appropriate error response via RabbitMQ.
+
+## This Service's APIs
+
+This service exposes the following APIs:
+
+### **Partner Portal**
+
+[H25](../../api_groups/H25.md) - HTTP API for Partner Portal to manage partner general information (view, update, upload logo)
+
+[H26](../../api_groups/H26.md) - HTTP API for Partner Portal to manage Core connection configuration (view, test, save)
+
+### **Authorized Core Gateway Service**
+
+[A12](../../api_groups/A12.md) - RabbitMQ API to handle Core service endpoint queries from Core Gateway
+- Request Queue: `partner_core_gateway_requests`
+- Response Queue: `partner_core_gateway_responses`
+
+### **Core's Partner Management Service (S07)**
+
+[H11](../../api_groups/H11.md) - HTTP API to test connection to Core and verify API key authentication
 
 ## Technology
 
@@ -194,3 +298,56 @@ This service directly interacts with the **Partner General Information DB** data
 - If this service needs to expose HTTP API(s), use Flask.
 
 - The program entry point is [in this file](../../../app/__main__.py).
+
+## Database Schema
+
+Database: `telcenter_partner_partner`
+
+### Table: `partner`
+
+Lưu trữ thông tin kết nối của các Partner telecom. Đây là bảng chính cho việc quản lý partner.
+
+| Tên trường | Kiểu dữ liệu | Ràng buộc | Mô tả |
+|------------|--------------|-----------|-------|
+| `id` | INT | PK, Auto Increment | ID định danh nhà mạng |
+| `name` | VARCHAR(100) | Not Null, Unique | Tên nhà mạng (VD: Vinaphone, Viettel) |
+| `public_key` | VARCHAR(255) | Not Null | Public key để xác thực API |
+| `base_url` | VARCHAR(255) | Nullable | Endpoint API của hệ thống Partner |
+| `is_active` | BOOLEAN | NOT NULL, Default: true | Trạng thái hoạt động |
+| `created_at` | DATETIME | NOT NULL, Default: CURRENT_TIMESTAMP | Thời gian tạo |
+| `updated_at` | DATETIME | NULL | Thời gian cập nhật gần nhất |
+| `deleted_at` | DATETIME | NULL | Thời gian xóa (soft delete) |
+| `last_health_check` | DATETIME | NULL | Thời gian kiểm tra kết nối gần nhất |
+| `health_status` | VARCHAR(50) | NULL | Trạng thái sức khỏe: healthy/unhealthy/unknown |
+
+Sample record:
+
+```sql
+INSERT INTO partner (id, name, public_key, base_url, is_active, created_at, last_health_check, health_status)
+VALUES (1, 'Viettel', 'pk_viettel_abc123...', 'https://partner.viettel.com.vn/api', true, '2025-12-08 10:30:00', '2025-12-08 10:30:00', 'healthy');
+```
+
+### Table: `role`
+
+Quản lý các vai trò trong hệ thống.
+
+| Tên trường | Kiểu dữ liệu | Ràng buộc | Mô tả |
+|------------|--------------|-----------|-------|
+| `id` | INT | PK, Auto Increment | ID vai trò |
+| `name` | VARCHAR(100) | Unique, Not Null | Tên vai trò (Admin, Chat Agent, Customer...) |
+
+### Table: `permission_role`
+
+Liên kết vai trò với quyền hạn.
+
+| Tên trường | Kiểu dữ liệu | Ràng buộc | Mô tả |
+|------------|--------------|-----------|-------|
+| `role_id` | INT | Indexed, Not Null | ID vai trò |
+| `permission_id` | VARCHAR(100) | Indexed, Not Null | Tên vai trò (Admin, Chat Agent, Customer...) |
+
+Quản lý các quyền hạn trong hệ thống.
+
+| Tên trường | Kiểu dữ liệu | Ràng buộc | Mô tả |
+|------------|--------------|-----------|-------|
+| `id` | INT | PK, Auto Increment | ID quyền hạn |
+| `name` | VARCHAR(255) | Unique, Not Null | Tên quyền (quyền xem, thêm, sửa, xóa gì đó; quyền tư vấn...) |
