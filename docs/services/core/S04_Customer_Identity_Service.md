@@ -98,20 +98,23 @@ Cấu hình DB: `PARTNER_MONGODB_URI` trong `.env`.
 
 ## The Flow
 
-**{{DESCRIBE_THE_STEPS_FROM_1_TO_N}}**
-
-If it fails at any stage, the whole process fails.
-That is, immediately return error with the
-appropriate error message.
-
+Based on the APIs' behavior.
 
 ## This Service's APIs
-[A04](../api_groups/A04.md)
+[A04](../../api_groups/A04.md)
 
 
+## Configuration Required
 
+This endpoint requires the following Google OAuth environment variables:
 
+  GOOGLE_CLIENT_ID
+  GOOGLE_CLIENT_SECRET
+  GOOGLE_REDIRECT_URI
 
+Be sure to include them in .env.example
+and provide the instructions on where
+to get them.
 
 ## Technology
 
@@ -127,15 +130,22 @@ appropriate error message.
 - The class `MessageQueueService` must be used for RabbitMQ communication (which internally
     use `pika`).
 
-    The class is [located in this file](../../app/services/MessageQueueService.py).
+    The class is [located in this file](../../../app/services/MessageQueueService.py).
 
-    An example of using this class [is given here](../MessageQueueService-usage-example.py).
+    An example of using this class [is given here](../../MessageQueueService-usage-example.py).
 
     Also, for multithreading, only use the scheme in that file.
     Any other use of multithreading, if necessary, must strictly
     look for hazards - use locks and other synchronization primitives
     where appropriate.
 
-- If this service needs to expose HTTP API(s), use Flask.
+- If this service needs to expose HTTP API(s), use Flask. For CRUD tasks, the class
+    `BaseCRUDService` must be subclassed, overriding appropriately. The class
+    is [located in this file](../../../app/services/common/BaseCRUDService.py)
 
-- The program entry point is [in this file](../../app/__main__.py).
+- The program entry point is [in this file](../../../app/__main__.py).
+
+- Embraces Dependency Injection practices
+- All actions are logged for **audit & security purposes**. Currently,
+    there must be a class dedicated for logging, and its instances
+    are injectible to the service classes that need logging.

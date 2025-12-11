@@ -89,10 +89,9 @@ a `.env.example` file for that.
 
 ### S14 Partner Metrics Service
 
-[A14](../api_groups/A14.md)
+[A14](../../api_groups/A14.md)
 
 
-//========================================================================================//
 ## Database Design
 
 S10 sử dụng **Partner DB** (MongoDB) với các collections sau:
@@ -190,28 +189,13 @@ Cấu hình DB: `PARTNER_MONGODB_URI` trong `.env`.
 
 ## The Flow
 
-**{{DESCRIBE_THE_STEPS_FROM_1_TO_N}}**
+Based on the APIs' behavior.
 
-If it fails at any stage, the whole process fails.
-That is, immediately return error with the
-appropriate error message.
-//========================================================================================//
+## This Service's APIs
 
+[A14](../../api_groups/A14.md)
 
-
-
-
-
-## This Service's APIs  
-[A14](../api_groups/A14.md)    
-[H27](../api_groups/H27.md)
-
-
-
-
-
-
-
+[H27](../../api_groups/H27.md)
 
 
 ## Technology
@@ -228,15 +212,22 @@ appropriate error message.
 - The class `MessageQueueService` must be used for RabbitMQ communication (which internally
     use `pika`).
 
-    The class is [located in this file](../../app/services/MessageQueueService.py).
+    The class is [located in this file](../../../app/services/MessageQueueService.py).
 
-    An example of using this class [is given here](../MessageQueueService-usage-example.py).
+    An example of using this class [is given here](../../MessageQueueService-usage-example.py).
 
     Also, for multithreading, only use the scheme in that file.
     Any other use of multithreading, if necessary, must strictly
     look for hazards - use locks and other synchronization primitives
     where appropriate.
 
-- If this service needs to expose HTTP API(s), use Flask.
+- If this service needs to expose HTTP API(s), use Flask. For CRUD tasks, the class
+    `BaseCRUDService` must be subclassed, overriding appropriately. The class
+    is [located in this file](../../../app/services/common/BaseCRUDService.py)
 
-- The program entry point is [in this file](../../app/__main__.py).
+- The program entry point is [in this file](../../../app/__main__.py).
+
+- Embraces Dependency Injection practices
+- All actions are logged for **audit & security purposes**. Currently,
+    there must be a class dedicated for logging, and its instances
+    are injectible to the service classes that need logging.

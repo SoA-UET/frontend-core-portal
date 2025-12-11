@@ -78,47 +78,25 @@ a `.env.example` file for that.
 
 ## Database Design
 
-S06 sử dụng **Core DB** (MongoDB) với các collections sau:
+S06 sử dụng **Core DB** (MongoDB)
+
+Cấu hình DB: `MONGODB_URI` trong `.env`.
+
+Có các collections sau:
 
 ### Collection: `roles`
 
 **Schema:**
 
-```json
+```ts
 {
   "_id": ObjectId,
-  "name": String  // Unique
+  "name": string, // UNIQUE, human-readable names e.g. "Tư vấn viên kênh thoại"
+  "permissions": Array<string> // danh sách các quyền (ví dụ: consult_audio)
 }
 ```
 
 **Indexes:** `{ "name": 1 }` (unique)
-
-### Collection: `permissions`
-
-**Schema:**
-
-```json
-{
-  "_id": ObjectId,
-  "name": String  // Unique
-}
-```
-
-**Indexes:** `{ "name": 1 }` (unique)
-
-### Collection: `role_permissions`
-
-**Schema:**
-
-```json
-{
-  "_id": ObjectId,
-  "role_id": ObjectId,
-  "permission_id": ObjectId
-}
-```
-
-**Indexes:** `{ "role_id": 1 }`, `{ "permission_id": 1 }`
 
 ### Collection: `employees`
 
@@ -128,42 +106,21 @@ S06 sử dụng **Core DB** (MongoDB) với các collections sau:
 {
   "_id": ObjectId,
   "role_id": ObjectId,
-  "partner_id": null,
+  "email": String,
   "password_hash": String,
-  "full_name": String,
-  "created_at": Date,
-  "status": String
+  "full_name": String
 }
 ```
 
-**Indexes:** `{ "role_id": 1 }`
-
-Cấu hình DB: `CORE_MONGODB_URI` trong `.env`.
-
-
 ## The Flow
 
-**{{DESCRIBE_THE_STEPS_FROM_1_TO_N}}**
-
-If it fails at any stage, the whole process fails.
-That is, immediately return error with the
-appropriate error message.
-
-
-
-
-
-
+Based on the APIs' behavior.
 
 ## This Service's APIs
-[A06](../api_groups/A06.md)   
 
+[A06](../../api_groups/A06.md)
 
-
-
-
-
-
+[H23](../../api_groups/H23.md)
 
 ## Technology
 
@@ -179,15 +136,22 @@ appropriate error message.
 - The class `MessageQueueService` must be used for RabbitMQ communication (which internally
     use `pika`).
 
-    The class is [located in this file](../../app/services/MessageQueueService.py).
+    The class is [located in this file](../../../app/services/MessageQueueService.py).
 
-    An example of using this class [is given here](../MessageQueueService-usage-example.py).
+    An example of using this class [is given here](../../MessageQueueService-usage-example.py).
 
     Also, for multithreading, only use the scheme in that file.
     Any other use of multithreading, if necessary, must strictly
     look for hazards - use locks and other synchronization primitives
     where appropriate.
 
-- If this service needs to expose HTTP API(s), use Flask.
+- If this service needs to expose HTTP API(s), use Flask. For CRUD tasks, the class
+    `BaseCRUDService` must be subclassed, overriding appropriately. The class
+    is [located in this file](../../../app/services/common/BaseCRUDService.py)
 
-- The program entry point is [in this file](../../app/__main__.py).
+- The program entry point is [in this file](../../../app/__main__.py).
+
+- Embraces Dependency Injection practices
+- All actions are logged for **audit & security purposes**. Currently,
+    there must be a class dedicated for logging, and its instances
+    are injectible to the service classes that need logging.
