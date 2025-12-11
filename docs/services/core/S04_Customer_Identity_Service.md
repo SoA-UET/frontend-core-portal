@@ -71,6 +71,30 @@ a `.env.example` file for that.
 [A04](../api_groups/A04.md)
 
 
+## Database Design
+
+S04 sử dụng **Partner DB** (MongoDB) với collection chính sau:
+
+### Collection: `customers`
+
+**Schema:**
+
+```json
+{
+  "_id": ObjectId,
+  "phone_number": String,  // Unique
+  "password_hash": String,
+  "full_name": String,
+  "address": String,
+  "created_at": Date,
+  "status": String
+}
+```
+
+**Indexes:** `{ "phone_number": 1 }` (unique)
+
+Cấu hình DB: `PARTNER_MONGODB_URI` trong `.env`.
+
 
 ## The Flow
 
