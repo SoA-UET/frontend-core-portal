@@ -93,6 +93,101 @@ a `.env.example` file for that.
 
 
 //========================================================================================//
+## Database Design
+
+S10 sử dụng **Partner DB** (MongoDB) với các collections sau:
+
+### Collection: `roles`
+
+Lưu trữ vai trò cho nhân viên Partner.
+
+**Schema:**
+
+```json
+{
+  "_id": ObjectId,
+  "name": String,  // e.g., "PARTNER_ADMIN"
+  "created_at": Date,
+  "updated_at": Date
+}
+```
+
+**Indexes:** `{ "name": 1 }` (unique)
+
+### Collection: `permissions`
+
+Lưu trữ quyền cho Partner.
+
+**Schema:**
+
+```json
+{
+  "_id": ObjectId,
+  "name": String,  // e.g., "manage_partner_employees"
+  "description": String,
+  "created_at": Date,
+  "updated_at": Date
+}
+```
+
+**Indexes:** `{ "name": 1 }` (unique)
+
+### Collection: `role_permissions`
+
+Liên kết vai trò với quyền.
+
+**Schema:**
+
+```json
+{
+  "_id": ObjectId,
+  "role_id": ObjectId,  // Ref to roles._id
+  "permission_id": ObjectId,  // Ref to permissions._id
+  "created_at": Date
+}
+```
+
+**Indexes:** `{ "role_id": 1 }`, `{ "permission_id": 1 }`, compound unique.
+
+### Collection: `employees`
+
+**Schema:**
+
+```json
+{
+  "_id": ObjectId,
+  "role_id": ObjectId,
+  "partner_id": ObjectId,  // Không null
+  "password_hash": String,
+  "full_name": String,
+  "created_at": Date,
+  "status": String
+}
+```
+
+**Indexes:** `{ "role_id": 1 }`, `{ "partner_id": 1 }`
+
+### Collection: `customers`
+
+**Schema:**
+
+```json
+{
+  "_id": ObjectId,
+  "phone_number": String,  // Unique
+  "password_hash": String,
+  "full_name": String,
+  "address": String,
+  "created_at": Date,
+  "status": String
+}
+```
+
+**Indexes:** `{ "phone_number": 1 }` (unique)
+
+Cấu hình DB: `PARTNER_MONGODB_URI` trong `.env`.
+
+
 ## The Flow
 
 **{{DESCRIBE_THE_STEPS_FROM_1_TO_N}}**

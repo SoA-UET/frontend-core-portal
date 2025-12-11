@@ -76,6 +76,71 @@ a `.env.example` file for that.
 
 
 
+## Database Design
+
+S06 sử dụng **Core DB** (MongoDB) với các collections sau:
+
+### Collection: `roles`
+
+**Schema:**
+
+```json
+{
+  "_id": ObjectId,
+  "name": String  // Unique
+}
+```
+
+**Indexes:** `{ "name": 1 }` (unique)
+
+### Collection: `permissions`
+
+**Schema:**
+
+```json
+{
+  "_id": ObjectId,
+  "name": String  // Unique
+}
+```
+
+**Indexes:** `{ "name": 1 }` (unique)
+
+### Collection: `role_permissions`
+
+**Schema:**
+
+```json
+{
+  "_id": ObjectId,
+  "role_id": ObjectId,
+  "permission_id": ObjectId
+}
+```
+
+**Indexes:** `{ "role_id": 1 }`, `{ "permission_id": 1 }`
+
+### Collection: `employees`
+
+**Schema:**
+
+```json
+{
+  "_id": ObjectId,
+  "role_id": ObjectId,
+  "partner_id": null,
+  "password_hash": String,
+  "full_name": String,
+  "created_at": Date,
+  "status": String
+}
+```
+
+**Indexes:** `{ "role_id": 1 }`
+
+Cấu hình DB: `CORE_MONGODB_URI` trong `.env`.
+
+
 ## The Flow
 
 **{{DESCRIBE_THE_STEPS_FROM_1_TO_N}}**
