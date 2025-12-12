@@ -136,14 +136,10 @@ Database: `telcenter_partner_partner`
 
 Lưu trữ thông tin kết nối của các Partner telecom. Đây là bảng chính cho việc quản lý partner.
 
-| Tên trường   | Kiểu dữ liệu | Mô tả                                 |
-| ------------ | ------------ | ------------------------------------- |
-| `id`         | ObjectId     | Auto-generated                        |
-| `partner_id` | string       | ID of this partner, assigned by Core  |
-| `name`       | string       | Tên nhà mạng (VD: Vinaphone, Viettel) |
-| `api_key`    | string       | API key để xác thực API               |
-| `core_url`   | string       | Endpoint API của hệ thống Core        |
-| `created_at` | DATETIME     | Thời gian tạo                         |
-| `updated_at` | DATETIME     | Thời gian cập nhật gần nhất           |
-
-**{{TODO_CONVERT_TO_LIST}}**
+- `id` (ObjectId, Primary Key): Auto-generated
+- `partner_id` (string): ID of this partner, assigned by Core
+- `name` (string): Tên nhà mạng (VD: Vinaphone, Viettel)
+- `api_key` (string): API key để xác thực API
+- `core_url` (string): Endpoint API của hệ thống Core
+- `created_at` (datetime): Thời gian tạo
+- `updated_at` (datetime): Thời gian cập nhật gần nhất
