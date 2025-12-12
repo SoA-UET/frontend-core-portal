@@ -119,13 +119,9 @@ Database: `telcenter_partner_core`
 
 Lưu trữ thông tin kết nối của các Partner telecom. Đây là bảng chính cho việc quản lý partner.
 
-| Tên trường   | Kiểu dữ liệu | Ràng buộc | Mô tả                                 |
-| ------------ | ------------ | --------- | ------------------------------------- |
-| `id`         | ObjectId     | PK        | ID định danh nhà mạng                 |
-| `name`       | string       | Unique    | Tên nhà mạng (VD: Vinaphone, Viettel) |
-| `api_key`    | string       |           | API key để xác thực API               |
-| `base_url`   | string       |           | Endpoint API của hệ thống Partner     |
-| `created_at` | datetime     |           | Thời gian tạo                         |
-| `updated_at` | datetime     |           | Thời gian cập nhật gần nhất           |
-
-**{{TODO_CONVERT_TO_LIST}}**
+- `id` (ObjectId, Primary Key): ID định danh nhà mạng
+- `name` (string, Unique): Tên nhà mạng (VD: Vinaphone, Viettel)
+- `api_key` (string): API key để xác thực API
+- `base_url` (string): Endpoint API của hệ thống Partner
+- `created_at` (datetime): Thời gian tạo
+- `updated_at` (datetime): Thời gian cập nhật gần nhất
