@@ -94,7 +94,7 @@ a `.env.example` file for that.
 
 ## Database Design
 
-S10 sử dụng **Partner DB** (MongoDB) với các collections sau:
+S10 sử dụng MongoDB với các collections sau:
 
 ### Collection: `roles`
 
@@ -184,8 +184,7 @@ Liên kết vai trò với quyền.
 
 **Indexes:** `{ "phone_number": 1 }` (unique)
 
-Cấu hình DB: `PARTNER_MONGODB_URI` trong `.env`.
-
+Cấu hình DB: `MONGO_URL` trong `.env`.
 
 ## The Flow
 

@@ -68,12 +68,11 @@ a `.env.example` file for that.
 
 ### S08 Metrics Service
 
-[A04](../api_groups/A04.md)
-
+[A04](../../api_groups/A04.md)
 
 ## Database Design
 
-S04 sử dụng **Partner DB** (MongoDB) với collection chính sau:
+S04 sử dụng MongoDB với collection chính sau:
 
 ### Collection: `customers`
 
@@ -93,16 +92,15 @@ S04 sử dụng **Partner DB** (MongoDB) với collection chính sau:
 
 **Indexes:** `{ "phone_number": 1 }` (unique)
 
-Cấu hình DB: `PARTNER_MONGODB_URI` trong `.env`.
-
+Cấu hình DB: `MONGO_URL` trong `.env`.
 
 ## The Flow
 
 Based on the APIs' behavior.
 
 ## This Service's APIs
-[A04](../../api_groups/A04.md)
 
+[H20](../../api_groups/H20.md)
 
 ## Configuration Required
 

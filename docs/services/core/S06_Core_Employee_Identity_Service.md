@@ -68,19 +68,13 @@ a `.env.example` file for that.
 
 ### S08 Metrics Service
 
-[A06](../api_groups/A06.md)
-
-
-
-
-
-
+[A06](../../api_groups/A06.md)
 
 ## Database Design
 
-S06 sử dụng **Core DB** (MongoDB)
+S06 sử dụng MongoDB.
 
-Cấu hình DB: `MONGODB_URI` trong `.env`.
+Cấu hình DB: `MONGO_URL` trong `.env`.
 
 Có các collections sau:
 
