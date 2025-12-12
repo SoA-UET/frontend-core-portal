@@ -57,15 +57,19 @@ The default queue names will be specified for
 each such API. The queue names should be configurable
 via `.env`, too.
 
-## Environment Configuration
+## Peer Service APIs
 
-Note that the base URLs to call peer services
+Note that the base URL to call the services
 must be specified via `.env`. Construct
 a `.env.example` file for that.
 
+[A12](../../api_groups/A12.md)
+
+[H11](../../api_groups/H11.md)
+
 ## The Flow
 
-### Flow 1: Connect to Telcenter Core
+### Main Flow: Connect to Telcenter Core
 
 1. Admin Telcenter Partner obtains the Core API URL,
    appropriate Partner ID, and API key. He then enters
@@ -82,24 +86,11 @@ If it fails at any stage, return the appropriate error response via RabbitMQ.
 
 ## This Service's APIs
 
-This service exposes the following APIs:
-
 ### **Partner Portal**
 
-[H25](../../api_groups/H25.md) - HTTP API for Partner Portal to manage partner general information (view, update, upload logo)
+[H25](../../api_groups/H25.md)
 
-[H26](../../api_groups/H26.md) - HTTP API for Partner Portal to manage Core connection configuration (view, test, save)
-
-### **Authorized Core Gateway Service**
-
-[A12](../../api_groups/A12.md) - RabbitMQ API to handle Core service endpoint queries from Core Gateway
-
-- Request Queue: `partner_core_gateway_requests`
-- Response Queue: `partner_core_gateway_responses`
-
-### **Core's Partner Management Service (S07)**
-
-[H11](../../api_groups/H11.md) - HTTP API to test connection to Core and verify API key authentication
+[H26](../../api_groups/H26.md)
 
 ## Technology
 

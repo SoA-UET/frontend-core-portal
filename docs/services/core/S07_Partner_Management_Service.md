@@ -57,32 +57,25 @@ The default queue names will be specified for
 each such API. The queue names should be configurable
 via `.env`, too.
 
+Note that the base URL to call the services
+must be specified via `.env`. Construct
+a `.env.example` file for that.
+
 ## The Flow
 
 Based on the APIs' behaviors.
 
 ## This Service's APIs
 
-This service exposes the following APIs:
+[H11](../../api_groups/H11.md)
 
-### **Core Portal**
+[H24](../../api_groups/H24.md)
 
-[H24](../../api_groups/H24.md) - HTTP API for Core Portal to manage partner connections (create, update, delete)
+[A09](../../api_groups/A09.md)
 
-### **Authorized Partner Gateway Service**
+[A07](../../api_groups/A07.md)
 
-[A09](../../api_groups/A09.md) - RabbitMQ API to handle partner routing queries from Partner Gateway
-
-- Request Queue: `partner_management_requests`
-- Response Queue: `partner_management_responses`
-
-## Peer Service APIs
-
-This service calls the following peer service APIs:
-
-### **Partner General Information Service (S09)**
-
-[H11](../../api_groups/H11.md) - HTTP API to verify partner connections and retrieve partner capabilities
+[A37](../../api_groups/A37.md)
 
 ## Technology
 
