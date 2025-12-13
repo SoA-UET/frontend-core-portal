@@ -65,13 +65,17 @@ must be specified via `.env`. Construct
 a `.env.example` file for that.
 
 ### **S01. Consultation Service**
-[A03](../api_groups/A03.md)
+[A03](../api_groups/A03a.md) (Event)
+[A03](../api_groups/A03b.md) (Method)
 
 ### **S04. Customer Identity Service**
-[A04](../api_groups/A04.md)
+[A04](../api_groups/A04a.md) (Event)
+[A04](../api_groups/A04b.md) (Method)
+
 
 ### **S07. Partner Management Service**
-[A07](../api_groups/A07.md)
+[A07](../api_groups/A07.md) (Event)
+[A07](../api_groups/A07.md) (Method)
 
 
 
@@ -402,7 +406,7 @@ This service exposes the following APIs:
 ### Event Consumer APIs (Background Processing)
 
 **A03a - Consultation Events**
-[A03](../../api_groups/A03.md) - Consumes real-time events from S01 Consultation Service (RabbitMQ)
+[A03](../../api_groups/A03a.md) - Consumes real-time events from S01 Consultation Service (RabbitMQ)
   - Event Queue: `s01_events_queue`
   - Events consumed:
     - `conversation_start` - Track new conversations
@@ -411,7 +415,7 @@ This service exposes the following APIs:
     - `conversation_forwarded` - Track AI failures and offload metrics
 
 **A04a - Customer Identity Events**
-[A04](../../api_groups/A04.md) - Consumes real-time events from S04 Customer Identity Service (RabbitMQ)
+[A04](../../api_groups/A04a.md) - Consumes real-time events from S04 Customer Identity Service (RabbitMQ)
   - Event Queue: `s04_events_queue`
   - Events consumed:
     - `customer_registered` - Track new customer registrations
@@ -419,7 +423,7 @@ This service exposes the following APIs:
 ### Method Call APIs (Request/Response via RabbitMQ)
 
 **A03b - Consultation Methods**
-[A03](../../api_groups/A03.md) - Calls S01 to retrieve aggregated conversation statistics (RabbitMQ)
+[A03](../../api_groups/A03b.md) - Calls S01 to retrieve aggregated conversation statistics (RabbitMQ)
   - Request Queue: `s08_s01_requests_queue`
   - Response Queue: `s08_s01_responses_queue`
   - Methods used:
@@ -428,7 +432,7 @@ This service exposes the following APIs:
     - `get_offloaded_conversations_by_partner` - Get per-partner offload metrics
 
 **A04b - Customer Identity Methods**
-[A04](../../api_groups/A04.md) - Calls S04 to retrieve customer statistics (RabbitMQ)
+[A04](../../api_groups/A04b.md) - Calls S04 to retrieve customer statistics (RabbitMQ)
   - Request Queue: `s08_s04_requests_queue`
   - Response Queue: `s08_s04_responses_queue`
   - Methods used:

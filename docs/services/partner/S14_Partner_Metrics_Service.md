@@ -63,8 +63,8 @@ must be specified via `.env`. Construct
 a `.env.example` file for that.
 
 ### **S08. Core Metrics Service**
-[A17](../api_groups/A17.md)
-
+[A17](../api_groups/A17.md) (Event)
+[A17](../api_groups/A17.md) (Method)
 
 
 
@@ -326,7 +326,7 @@ This service exposes the following APIs:
 ### Event Consumer APIs (Background Processing)
 
 **A17a - Core Metrics Events**
-[A17](../../api_groups/A17.md) - Consumes real-time events from S08 Core Metrics Service (RabbitMQ)
+[A17](../../api_groups/A17a.md) - Consumes real-time events from S08 Core Metrics Service (RabbitMQ)
   - Event Queue: `s08_events_queue`
   - Events consumed (filtered by partner_id):
     - `conversation_start_by_partner` - Track new conversations for this partner
@@ -336,7 +336,7 @@ This service exposes the following APIs:
 ### Method Call APIs (Request/Response via RabbitMQ)
 
 **A17b - Core Metrics Methods**
-[A17](../../api_groups/A17.md) - Calls S08 to retrieve partner-specific statistics (RabbitMQ)
+[A17](../../api_groups/A17b.md) - Calls S08 to retrieve partner-specific statistics (RabbitMQ)
   - Request Queue: `s14_s08_requests_queue`
   - Response Queue: `s14_s08_responses_queue`
   - Methods used:
