@@ -25,37 +25,6 @@ The users' inquiries and answers to those are primarily in Vietnamese.
 Now, you are designing the S10. Partner Employee Identity service, in Python.
 This service is inside TELCENTER PARTNER system.
 
-Here are the peer services that the S10. Partner Employee Identity service may interact with. We will come up
-with the flow of this service itself later.
-
-- S14 – Partner Metrics Service is responsible for collecting, storing, and providing operational metrics for the Telcenter Partner subsystem. It supports partners in monitoring their own performance, service usage, and operational effectiveness.
-
--   Main Responsibilities
-
-        Collect metrics from partner-related services such as:
-
-        S11 – Partner Local Knowledge Service
-
-        S12 – Partner Knowledge Update Service
-
-        S13 – Partner Consultation Service
-
-        Store statistical data in the Partner Metrics Database.
-
--   Aggregate and analyze partner-level performance indicators such as:
-
-        Number of partner consultations
-
-        Knowledge update frequency
-
-        Service usage statistics
-
-        Provide metrics data to:
-
-        Partner Portal for dashboards and reports
-
-        Partner administrators for performance evaluation
-
 ## A Note on API Transport Layers
 
 The APIs of the services (including this one
@@ -102,51 +71,13 @@ Lưu trữ vai trò cho nhân viên Partner.
 
 **Schema:**
 
-```json
+```ts
 {
   "_id": ObjectId,
-  "name": String,  // e.g., "PARTNER_ADMIN"
-  "created_at": Date,
-  "updated_at": Date
+  "name": string, // UNIQUE, human-readable names e.g. "Tư vấn viên kênh thoại"
+  "permissions": Array<string> // danh sách các quyền (ví dụ: consult_audio)
 }
 ```
-
-**Indexes:** `{ "name": 1 }` (unique)
-
-### Collection: `permissions`
-
-Lưu trữ quyền cho Partner.
-
-**Schema:**
-
-```json
-{
-  "_id": ObjectId,
-  "name": String,  // e.g., "manage_partner_employees"
-  "description": String,
-  "created_at": Date,
-  "updated_at": Date
-}
-```
-
-**Indexes:** `{ "name": 1 }` (unique)
-
-### Collection: `role_permissions`
-
-Liên kết vai trò với quyền.
-
-**Schema:**
-
-```json
-{
-  "_id": ObjectId,
-  "role_id": ObjectId,  // Ref to roles._id
-  "permission_id": ObjectId,  // Ref to permissions._id
-  "created_at": Date
-}
-```
-
-**Indexes:** `{ "role_id": 1 }`, `{ "permission_id": 1 }`, compound unique.
 
 ### Collection: `employees`
 
@@ -156,33 +87,11 @@ Liên kết vai trò với quyền.
 {
   "_id": ObjectId,
   "role_id": ObjectId,
-  "partner_id": ObjectId,  // Không null
+  "email": String, // UNIQUE
   "password_hash": String,
-  "full_name": String,
-  "created_at": Date,
-  "status": String
+  "full_name": String
 }
 ```
-
-**Indexes:** `{ "role_id": 1 }`, `{ "partner_id": 1 }`
-
-### Collection: `customers`
-
-**Schema:**
-
-```json
-{
-  "_id": ObjectId,
-  "phone_number": String,  // Unique
-  "password_hash": String,
-  "full_name": String,
-  "address": String,
-  "created_at": Date,
-  "status": String
-}
-```
-
-**Indexes:** `{ "phone_number": 1 }` (unique)
 
 Cấu hình DB: `MONGO_URL` trong `.env`.
 

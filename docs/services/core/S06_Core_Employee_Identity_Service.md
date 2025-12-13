@@ -28,12 +28,7 @@ This service is inside the TELCENTER CORE system.
 Here are the peer services that the S06: Core Employee Identity Service service may interact with. We will come up
 with the flow of this service itself later.
 
-- S08_METRICS SERVICE: [Detailed documentation in S08_Core_Metrics_Service.md](S08_Core_Metrics_Service.md) S8 – Metrics Service is the service responsible for collecting, storing, processing, and providing statistical data (metrics) for the entire Telcenter Core system.
-  It plays a critical role in:
-  - Monitoring system performance
-  - Evaluating consultation quality
-  - Analyzing user behavior
-  - Supporting management decision-making and operational optimization
+- S08_METRICS SERVICE is the service responsible for collecting, storing, processing, and providing statistical data (metrics) for the entire Telcenter Core system.
 
 ## A Note on API Transport Layers
 
@@ -90,8 +85,6 @@ Có các collections sau:
 }
 ```
 
-**Indexes:** `{ "name": 1 }` (unique)
-
 ### Collection: `employees`
 
 **Schema:**
@@ -100,7 +93,7 @@ Có các collections sau:
 {
   "_id": ObjectId,
   "role_id": ObjectId,
-  "email": String,
+  "email": String, // UNIQUE
   "password_hash": String,
   "full_name": String
 }
