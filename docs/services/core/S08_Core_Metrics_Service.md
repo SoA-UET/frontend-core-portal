@@ -74,7 +74,6 @@ a `.env.example` file for that.
 
 
 ### **S07. Partner Management Service**
-[A07](../api_groups/A07.md) (Event)
 [A07](../api_groups/A07.md) (Method)
 
 
@@ -94,8 +93,7 @@ S08 Metrics Service aggregates and provides 5 main types of metrics for the Core
    - Send RabbitMQ request via queue `s08_s04_requests_queue`
    - Method: `get_customer` (without date filters to get all-time total)
    - Wait for response from queue `s08_s04_responses_queue`
-   - Initialize `total_customers` counter in metrics database
-   - Cache initial data in Redis
+   - Initialize `total_customers` counter
    - If API call fails, retry up to 3 times before marking service as unhealthy
 
 2. **Initialize Event Listener**: 
@@ -106,7 +104,6 @@ S08 Metrics Service aggregates and provides 5 main types of metrics for the Core
    - Validate event payload: `customer_id`, `partner_id`
    - Increment `total_customers` counter in metrics database
    - Update partner-specific customer count if `partner_id` is present
-   - Cache updated metrics in Redis with TTL 300 seconds
    - If validation fails: log error, continue processing other events
 
 **On-Demand Query (H21.1: `GET /api/v1/metrics/users/total`):**
@@ -137,14 +134,13 @@ S08 Metrics Service aggregates and provides 5 main types of metrics for the Core
    - Send RabbitMQ request via queue `s08_s01_requests_queue`
    - Method: `get_conversation_statistics`
    - Wait for response from queue `s08_s01_responses_queue`
-   - Initialize counters in metrics database:
+   - Initialize counters:
      - `total_conversations`
      - `texting_conversations`
      - `calling_conversations`
      - `forwarding_conversations`
      - `ai_failed_conversations`
      - `offloaded_conversations`
-   - Cache initial data in Redis
    - If API call fails, retry up to 3 times before marking service as unhealthy
 
 2. **Initialize Event Listener**:
@@ -156,7 +152,6 @@ S08 Metrics Service aggregates and provides 5 main types of metrics for the Core
    - Increment `total_conversations` counter
    - Initialize conversation with default status "AI_AGENT_TEXTING"
    - Increment `texting_conversations` counter
-   - Store conversation metadata in cache
 
 3. **Process `conversation_status_update` Event**:
    - Validate payload: `conversation_id`, `old_status`, `new_status`, `partner_id`, `updated_at`
@@ -174,7 +169,6 @@ S08 Metrics Service aggregates and provides 5 main types of metrics for the Core
      - `old_status=AI_AGENT_CALLING, new_status=FORWARDING`: `calling_conversations--, forwarding_conversations++`
      - `old_status=AI_AGENT_TEXTING, new_status=FORWARDING`: `texting_conversations--, forwarding_conversations++`
    - Update partner-specific conversation counts
-   - Persist to database and update Redis cache
 
 **On-Demand Query (H21.2: `GET /api/v1/core/metrics/conversations/summary`):**
 
@@ -204,11 +198,10 @@ S08 Metrics Service aggregates and provides 5 main types of metrics for the Core
    - Send RabbitMQ request via queue `s08_s01_requests_queue`
    - Method: `get_customer_satisfaction_distribution`
    - Wait for response from queue `s08_s01_responses_queue`
-   - Initialize satisfaction counters in metrics database:
+   - Initialize satisfaction counters:
      - `satisfaction_1`, `satisfaction_2`, `satisfaction_3`, `satisfaction_4`, `satisfaction_5`
      - `total_ratings`
    - Calculate and store initial `average_rating`
-   - Cache initial data in Redis
    - If API call fails or returns "NO_DATA_FOUND", initialize all counters to 0
 
 2. **Process `conversation_customer_satisfaction_changed` Event**:
@@ -221,7 +214,6 @@ S08 Metrics Service aggregates and provides 5 main types of metrics for the Core
      ```
      average_rating = (1×satisfaction_1 + 2×satisfaction_2 + 3×satisfaction_3 + 4×satisfaction_4 + 5×satisfaction_5) / total_ratings
      ```
-   - Persist to database and update Redis cache
 
 **On-Demand Query (H21.3: `GET /api/v1/core/metrics/consultations/satisfaction`):**
 
@@ -261,9 +253,8 @@ S08 Metrics Service aggregates and provides 5 main types of metrics for the Core
    - Call A03b Method API to get current conversation statistics
    - Method: `get_conversation_statistics` (same as Flow 2)
    - Extract: `total_conversations`, `ai_failed_conversations`, `offloaded_conversations`
-   - Initialize offload metrics in database
+   - Initialize offload metrics
    - Calculate initial `offload_rate_percentage`
-   - Cache initial data in Redis
    - Note: This uses the same initial data load as Flow 2, can be done in parallel
 
 2. **Process `conversation_forwarded` Event**:
@@ -271,7 +262,7 @@ S08 Metrics Service aggregates and provides 5 main types of metrics for the Core
    - Increment `ai_failed_conversations` counter (conversation forwarded to human)
    - Update global and partner-specific failure counts
 
-2. **Calculate Offload Metrics** (continuous):
+3. **Calculate Offload Metrics**:
    ```
    offloaded_conversations = total_conversations - ai_failed_conversations
    offload_rate_percentage = (offloaded_conversations / total_conversations) × 100
@@ -306,13 +297,18 @@ S08 Metrics Service aggregates and provides 5 main types of metrics for the Core
    - Send RabbitMQ request via queue `s08_s01_requests_queue`
    - Method: `get_offloaded_conversations_by_partner`
    - Wait for response from queue `s08_s01_responses_queue`
-   - Initialize per-partner counters in metrics database for each partner_id:
+   - Initialize per-partner counters for each partner_id:
      - `partner_total_conversations[partner_id]`
      - `partner_offloaded_conversations[partner_id]`
    - Calculate `partner_ai_failed_conversations[partner_id]` = total - offloaded
    - Calculate initial `partner_offload_rate[partner_id]` for each partner
-   - Cache initial data in Redis
    - If API call fails or returns "NO_DATA_FOUND", initialize with empty partner list
+   - **Call A07 Method API to initialize partner cache**:
+     - Send RabbitMQ request via queue `s08_s07_requests_queue`
+     - Method: `get_partners`
+     - Wait for response from queue `s08_s07_responses_queue`
+     - Cache partner_id → partner_name mapping (TTL: 1 hour)
+     - If A07 fails: log warning, continue without partner names
 
 2. **Track Partner-Specific Metrics**:
    - All events from A03a include `partner_id`
@@ -323,7 +319,7 @@ S08 Metrics Service aggregates and provides 5 main types of metrics for the Core
      partner_offloaded_conversations[partner_id]
      ```
 
-2. **Calculate Per-Partner Rates**:
+3. **Calculate Per-Partner Rates**:
    ```
    For each partner_id:
      partner_offload_rate[partner_id] = 
@@ -341,10 +337,14 @@ S08 Metrics Service aggregates and provides 5 main types of metrics for the Core
    - Method: `get_offloaded_conversations_by_partner`
    - Apply partner_id filter if specified
    - Handle "NO_DATA_FOUND": return HTTP 200 with empty partners array
-4. **Query S07 Partner Management Service** (A07) - Optional enrichment:
-   - Get partner names and metadata for returned partner_ids
-   - Enrich response with `partner_name` field
+3. **Query S07 Partner Management Service via A07 Method API**:
+   - Send RabbitMQ request via queue `s08_s07_requests_queue`
+   - Method: `get_partners`
+   - Wait for response from queue `s08_s07_responses_queue`
+   - Cache partner list (TTL: 1 hour) to avoid repeated calls
+   - Map partner_id → partner_name from cached data
    - If S07 unavailable: log warning, use partner_id only (no partner_name)
+   - If partner_id not found in cache: refresh cache and retry once
 5. **Calculate Per-Partner Rates**:
    ```
    For each partner:
@@ -374,22 +374,15 @@ S08 Metrics Service aggregates and provides 5 main types of metrics for the Core
 
 **Database Connection Lost:**
 - Attempt reconnection (3 attempts, 5s delay)
-- Use Redis cache for read operations during outage
 - Buffer writes in memory (max 5,000 operations)
 - Return HTTP 503 if buffer full
 - Set health endpoint to unhealthy
 
-**Redis Cache Unavailable:**
-- Log warning (non-critical)
-- Fall back to direct database queries
-- Performance degradation expected
-- Continue normal operations
 
 **Peer Service Unavailable (S01, S04, S07):**
 - Return HTTP 500 with specific error message
 - Implement circuit breaker pattern:
   - After 5 consecutive failures: open circuit for 30 seconds
-  - Return cached data if available
   - After 30s: attempt half-open (single request)
   - Close circuit if request succeeds
 
@@ -409,16 +402,16 @@ This service exposes the following APIs:
 [A03](../../api_groups/A03a.md) - Consumes real-time events from S01 Consultation Service (RabbitMQ)
   - Event Queue: `s01_events_queue`
   - Events consumed:
-    - `conversation_start` - Track new conversations
-    - `conversation_status_update` - Track conversation state changes
-    - `conversation_customer_satisfaction_changed` - Track satisfaction ratings
-    - `conversation_forwarded` - Track AI failures and offload metrics
+    - `conversation_start`
+    - `conversation_status_update`
+    - `conversation_customer_satisfaction_changed` 
+    - `conversation_forwarded`
 
 **A04a - Customer Identity Events**
 [A04](../../api_groups/A04a.md) - Consumes real-time events from S04 Customer Identity Service (RabbitMQ)
   - Event Queue: `s04_events_queue`
   - Events consumed:
-    - `customer_registered` - Track new customer registrations
+    - `customer_registered`
 
 ### Method Call APIs (Request/Response via RabbitMQ)
 
@@ -427,25 +420,33 @@ This service exposes the following APIs:
   - Request Queue: `s08_s01_requests_queue`
   - Response Queue: `s08_s01_responses_queue`
   - Methods used:
-    - `get_conversation_statistics` - Get conversation totals and status counts
-    - `get_customer_satisfaction_distribution` - Get satisfaction rating distribution
-    - `get_offloaded_conversations_by_partner` - Get per-partner offload metrics
+    - `get_conversation_statistics`
+    - `get_customer_satisfaction_distribution`
+    - `get_offloaded_conversations_by_partner`
 
 **A04b - Customer Identity Methods**
 [A04](../../api_groups/A04b.md) - Calls S04 to retrieve customer statistics (RabbitMQ)
   - Request Queue: `s08_s04_requests_queue`
   - Response Queue: `s08_s04_responses_queue`
   - Methods used:
-    - `get_customer` - Get total customer count with optional partner filter
+    - `get_customer`
+
+**A07 - Partner Management Methods**
+[A07](../../api_groups/A07.md) - Calls S07 to retrieve partner information (RabbitMQ)
+  - Request Queue: `s08_s07_requests_queue`
+  - Response Queue: `s08_s07_responses_queue`
+  - Methods used:
+    - `get_partners`
+  - Usage: Cache partner list for enriching metrics responses with partner names
 
 ### HTTP API for Core Portal (H21)
 
 [H21](../../api_groups/H21.md) - Exposes metrics data to Core Portal (HTTP/REST)
-  - **H21.1**: `GET /api/v1/metrics/users/total` - Total registered users
-  - **H21.2**: `GET /api/v1/core/metrics/conversations/summary` - Conversation statistics (total/texting/calling)
-  - **H21.3**: `GET /api/v1/core/metrics/consultations/satisfaction` - Satisfaction distribution and average rating
-  - **H21.4**: `GET /api/v1/core/metrics/consultations/offload-rate` - Overall offload rate percentage
-  - **H21.5**: `GET /api/v1/core/metrics/consultations/offload-rate-by-partner` - Per-partner offload rates
+  - **H21.1**: `GET /api/v1/metrics/users/total`
+  - **H21.2**: `GET /api/v1/core/metrics/conversations/summary`
+  - **H21.3**: `GET /api/v1/core/metrics/consultations/satisfaction`
+  - **H21.4**: `GET /api/v1/core/metrics/consultations/offload-rate`
+  - **H21.5**: `GET /api/v1/core/metrics/consultations/offload-rate-by-partner`
 
 
 

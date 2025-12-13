@@ -84,12 +84,11 @@ S14 Partner Metrics Service aggregates and provides 3 main types of metrics for 
    - Send RabbitMQ request via queue `s14_s08_requests_queue`
    - Method: `get_partner_conversation_statistics` with this partner's `partner_id`
    - Wait for response from queue `s14_s08_responses_queue`
-   - Initialize counters in metrics database:
+   - Initialize counters:
      - `total_conversations`
      - `forwarding_conversations` (conversations being forwarded to partner)
      - `texting_conversations` (HUMAN_AGENT_TEXTING)
      - `calling_conversations` (HUMAN_AGENT_CALLING)
-   - Cache initial data in Redis
    - If API call fails, retry up to 3 times before marking service as unhealthy
    - Handle errors:
      - "PARTNER_NOT_FOUND": Log error and initialize all counters to 0
@@ -106,7 +105,6 @@ S14 Partner Metrics Service aggregates and provides 3 main types of metrics for 
    - Increment `total_conversations` counter
    - Initialize conversation with default status "FORWARDING"
    - Increment `forwarding_conversations` counter
-   - Store conversation metadata in cache
 
 4. **Process `conversation_changed_status_by_partner` Event**:
    - Validate payload: `conversation_id`, `partner_id`, `old_status`, `new_status`, `updated_at`
@@ -122,7 +120,6 @@ S14 Partner Metrics Service aggregates and provides 3 main types of metrics for 
      - `old_status=FORWARDING, new_status=HUMAN_AGENT_TEXTING`: forwarding_conversations--, texting_conversations++
      - `old_status=HUMAN_AGENT_TEXTING, new_status=HUMAN_AGENT_CALLING`: texting_conversations--, calling_conversations++
      - `old_status=FORWARDING, new_status=HUMAN_AGENT_CALLING`: forwarding_conversations--, calling_conversations++
-   - Persist to database and update Redis cache
 
 **On-Demand Query (H30.1: `GET /api/v1/partner/metrics/conversations`):**
 
@@ -131,8 +128,7 @@ S14 Partner Metrics Service aggregates and provides 3 main types of metrics for 
 3. **Query S08 via A17b Method API** (if date filters specified):
    - Method: `get_partner_conversation_statistics` with `partner_id`
    - Handle errors: "PARTNER_NOT_FOUND", "DB_CONNECTION_ERROR"
-4. **Retrieve from Cache** (if no date filters): Get real-time counters from Redis
-5. **Return Response**: HTTP 200 with:
+4. **Return Response**: HTTP 200 with:
    ```json
    {
      "status": "success",
@@ -160,11 +156,10 @@ S14 Partner Metrics Service aggregates and provides 3 main types of metrics for 
    - Send RabbitMQ request via queue `s14_s08_requests_queue`
    - Method: `get_partner_satisfaction_distribution` with this partner's `partner_id`
    - Wait for response from queue `s14_s08_responses_queue`
-   - Initialize satisfaction counters in metrics database:
+   - Initialize satisfaction counters:
      - `satisfaction_1`, `satisfaction_2`, `satisfaction_3`, `satisfaction_4`, `satisfaction_5`
      - `total_ratings`
    - Calculate and store initial `average_rating`
-   - Cache initial data in Redis
    - Handle errors:
      - "PARTNER_NOT_FOUND": Initialize all counters to 0
      - "NO_DATA_FOUND": Initialize all counters to 0
@@ -181,7 +176,6 @@ S14 Partner Metrics Service aggregates and provides 3 main types of metrics for 
      ```
      average_rating = (1×satisfaction_1 + 2×satisfaction_2 + 3×satisfaction_3 + 4×satisfaction_4 + 5×satisfaction_5) / total_ratings
      ```
-   - Persist to database and update Redis cache
 
 **On-Demand Query (H30.2: `GET /api/v1/partner/metrics/satisfaction-rate`):**
 
@@ -190,13 +184,12 @@ S14 Partner Metrics Service aggregates and provides 3 main types of metrics for 
 3. **Query S08 via A17b Method API** (if date filters specified):
    - Method: `get_partner_satisfaction_distribution` with `partner_id`
    - Handle "NO_DATA_FOUND": return HTTP 200 with empty distribution
-4. **Retrieve from Cache** (if no date filters): Get cached satisfaction data
-5. **Calculate Satisfaction Rate**:
+4. **Calculate Satisfaction Rate**:
    ```
    satisfied_customers = satisfaction_3 + satisfaction_4 + satisfaction_5
    satisfaction_rate_percentage = (satisfied_customers / total_ratings) × 100
    ```
-6. **Return Response**: HTTP 200 with:
+5. **Return Response**: HTTP 200 with:
    ```json
    {
      "status": "success",
@@ -223,14 +216,13 @@ S14 Partner Metrics Service aggregates and provides 3 main types of metrics for 
    - Call A17b Method API to get current conversation statistics from S08
    - Method: `get_partner_conversation_statistics` with `partner_id` (same as Flow 1)
    - Extract: `total_conversations`, `ai_failed_conversations`, `offloaded_conversations`
-   - Initialize offload metrics in database:
+   - Initialize offload metrics:
      - `ai_failed_conversations` (conversations forwarded to this partner)
      - `offloaded_conversations` (conversations handled by AI before reaching partner)
    - Calculate initial `offload_rate_percentage`:
      ```
      offload_rate_percentage = (offloaded_conversations / total_conversations) × 100
      ```
-   - Cache initial data in Redis
    - Note: This uses the same initial data load as Flow 1, can be done in parallel
 
 2. **Track Offload Metrics via Events**:
@@ -253,13 +245,12 @@ S14 Partner Metrics Service aggregates and provides 3 main types of metrics for 
 3. **Query S08 via A17b Method API** (if date filters specified):
    - Method: `get_partner_conversation_statistics` with `partner_id`
    - Extract: `total_conversations`, `ai_failed_conversations`, `offloaded_conversations`
-4. **Retrieve from Cache** (if no date filters): Get cached offload metrics
-5. **Calculate Offload Rate**:
+4. **Calculate Offload Rate**:
    ```
    offload_rate_percentage = (offloaded_conversations / total_conversations) × 100
    ```
    - Handle edge case: if `total_conversations` = 0, return `offload_rate_percentage` = 0
-6. **Return Response**: HTTP 200 with:
+5. **Return Response**: HTTP 200 with:
    ```json
    {
      "status": "success",
@@ -289,22 +280,15 @@ S14 Partner Metrics Service aggregates and provides 3 main types of metrics for 
 
 **Database Connection Lost:**
 - Attempt reconnection (3 attempts, 5s delay)
-- Use Redis cache for read operations during outage
 - Buffer writes in memory (max 3,000 operations)
 - Return HTTP 503 if buffer full
 - Set health endpoint to unhealthy
 
-**Redis Cache Unavailable:**
-- Log warning (non-critical)
-- Fall back to direct database queries
-- Performance degradation expected
-- Continue normal operations
 
 **S08 Core Metrics Service Unavailable:**
 - Return HTTP 500 with specific error message
 - Implement circuit breaker pattern:
   - After 5 consecutive failures: open circuit for 30 seconds
-  - Return cached data if available
   - After 30s: attempt half-open (single request)
   - Close circuit if request succeeds
 
@@ -329,9 +313,9 @@ This service exposes the following APIs:
 [A17](../../api_groups/A17a.md) - Consumes real-time events from S08 Core Metrics Service (RabbitMQ)
   - Event Queue: `s08_events_queue`
   - Events consumed (filtered by partner_id):
-    - `conversation_start_by_partner` - Track new conversations for this partner
-    - `conversation_changed_status_by_partner` - Track conversation state changes
-    - `conversation_satisfaction_change_by_partner` - Track satisfaction ratings
+    - `conversation_start_by_partner`
+    - `conversation_changed_status_by_partner`
+    - `conversation_satisfaction_change_by_partner`
 
 ### Method Call APIs (Request/Response via RabbitMQ)
 
@@ -340,15 +324,14 @@ This service exposes the following APIs:
   - Request Queue: `s14_s08_requests_queue`
   - Response Queue: `s14_s08_responses_queue`
   - Methods used:
-    - `get_partner_conversation_statistics` - Get conversation totals and status counts for this partner
-    - `get_partner_satisfaction_distribution` - Get satisfaction rating distribution for this partner
-
+    - `get_partner_conversation_statistics`
+    - `get_partner_satisfaction_distribution`
 ### HTTP API for Partner Portal (H30)
 
 [H30](../../api_groups/H30.md) - Exposes metrics data to Partner Portal (HTTP/REST)
-  - **H30.1**: `GET /api/v1/partner/metrics/conversations` - Conversation statistics (total/texting/calling)
-  - **H30.2**: `GET /api/v1/partner/metrics/satisfaction-rate` - Satisfaction distribution and average rating
-  - **H30.3**: `GET /api/v1/partner/metrics/offload-rate` - Partner-specific offload rate percentage
+  - **H30.1**: `GET /api/v1/partner/metrics/conversations`
+  - **H30.2**: `GET /api/v1/partner/metrics/satisfaction-rate`
+  - **H30.3**: `GET /api/v1/partner/metrics/offload-rate`
 
 
 
