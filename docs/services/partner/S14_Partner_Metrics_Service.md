@@ -28,11 +28,8 @@ This service is inside the **Telcenter Partner** system.
 Here are the peer services that the **S14. Metrics Service** service may interact with. We will come up
 with the flow of this service itself later.
 
-- **S13. Partner Consultation Service**: **This service is responsible for accepting consultation handover requests from Telcenter Core and answering them. Besides, it manages conversation history and stores all conversation data into Conversation DB**
-- **S12. Partner Knowledge Update Service**: **This service is responsible for managing knowledge data updates within the Partner system and submitting them to Telcenter Core for validation. It stores all partner knowledge update data into Partner Knowledge Update DB.**
-- **S10. Partner Employee Identity Service**: **This service is responsible for managing employee identities of Telcenter Partner. It handles employee account registration, authentication, update, deletion. Additionally, it stores all employee data into Partner Employee Identity DB.**
-- **S15. File Importing AI Agent**: **This service is responsible for automating the data entry process. Instead of manually inputting each knowledge item, employees simply need to upload document files. It utilizes an AI Agent to parse, extract, and restructure the information from these files.**
-- **S11. Partner Local Knowledge Service**: **This service is responsible for managing the local knowledge repository of the Partner system. It receives structured data then store them to the Partner Local Knowledge DB**
+- **S08. Core Metrics Service**: A service that measures and monitors certain metrics for other services. 
+
 
 ## A Note on API Transport Layers
 
@@ -65,42 +62,276 @@ Note that the base URL to call the services
 must be specified via `.env`. Construct
 a `.env.example` file for that.
 
-### **S13. Partner Consultation Service**
-[A17](../api_groups/A17.md)
-
-### **S12. Partner Knowledge Update Service**
-[A16](../api_groups/A16.md)
-
-### **S10. Partner Employee Identity Service**
-[A14](../api_groups/A14.md)
-
-### **S15. File Importing AI Agent**
-[A13](../api_groups/A13.md)
-
-### **S11. Partner Local Knowledge Service**
-[A15](../api_groups/A15.md)
-
+### **S08. Core Metrics Service**
+[A17](../api_groups/A17.md) (Event)
+[A17](../api_groups/A17.md) (Method)
 
 
 
 
 ## The Flow
 
-**{{DESCRIBE_THE_STEPS_FROM_1_TO_N}}**
+S14 Partner Metrics Service aggregates and provides 3 main types of metrics for the Partner Portal. The service operates in two modes: real-time metrics collection via events from Core (background processing) and responding to HTTP requests (on-demand queries).
 
-If it fails at any stage, the whole process fails.
-That is, immediately return error with the
-appropriate error message.
+---
+
+### Flow 1: Total Active Conversations with Partner Consultants
+
+**Background Processing (A17a Event Consumer):**
+
+1. **Service Startup - Initial Data Load**:
+   - Call A17b Method API to get current partner conversation statistics from S08
+   - Send RabbitMQ request via queue `s14_s08_requests_queue`
+   - Method: `get_partner_conversation_statistics` with this partner's `partner_id`
+   - Wait for response from queue `s14_s08_responses_queue`
+   - Initialize counters:
+     - `total_conversations`
+     - `forwarding_conversations` (conversations being forwarded to partner)
+     - `texting_conversations` (HUMAN_AGENT_TEXTING)
+     - `calling_conversations` (HUMAN_AGENT_CALLING)
+   - If API call fails, retry up to 3 times before marking service as unhealthy
+   - Handle errors:
+     - "PARTNER_NOT_FOUND": Log error and initialize all counters to 0
+     - "DB_CONNECTION_ERROR": Retry with backoff
+
+2. **Initialize Event Listener**:
+   - Spawn worker thread to consume events from S08 Core Metrics Service
+   - RabbitMQ queue: `s08_events_queue` (A17a)
+   - Filter events by this partner's `partner_id`
+
+3. **Process `conversation_start_by_partner` Event**:
+   - Validate payload: `conversation_id`, `partner_id`, `started_at`
+   - Verify `partner_id` matches this Partner's ID
+   - Increment `total_conversations` counter
+   - Initialize conversation with default status "FORWARDING"
+   - Increment `forwarding_conversations` counter
+
+4. **Process `conversation_changed_status_by_partner` Event**:
+   - Validate payload: `conversation_id`, `partner_id`, `old_status`, `new_status`, `updated_at`
+   - Verify `partner_id` matches this Partner's ID
+   - **Map status to category:**
+     - `FORWARDING` → forwarding_conversations
+     - `HUMAN_AGENT_TEXTING` → texting_conversations
+     - `HUMAN_AGENT_CALLING` → calling_conversations
+   - **Update counters:**
+     - Decrement (-1) counter for category of `old_status`
+     - Increment (+1) counter for category of `new_status`
+   - **Examples:**
+     - `old_status=FORWARDING, new_status=HUMAN_AGENT_TEXTING`: forwarding_conversations--, texting_conversations++
+     - `old_status=HUMAN_AGENT_TEXTING, new_status=HUMAN_AGENT_CALLING`: texting_conversations--, calling_conversations++
+     - `old_status=FORWARDING, new_status=HUMAN_AGENT_CALLING`: forwarding_conversations--, calling_conversations++
+
+**On-Demand Query (H30.1: `GET /api/v1/partner/metrics/conversations`):**
+
+1. **Authenticate Request**: Validate JWT token for Partner Portal
+2. **Validate Query Parameters**: Parse `from_date`, `to_date` (optional)
+3. **Query S08 via A17b Method API** (if date filters specified):
+   - Method: `get_partner_conversation_statistics` with `partner_id`
+   - Handle errors: "PARTNER_NOT_FOUND", "DB_CONNECTION_ERROR"
+4. **Return Response**: HTTP 200 with:
+   ```json
+   {
+     "status": "success",
+     "total_conversations": N,
+     "texting_conversations": N,
+     "calling_conversations": N,
+     "from_date": "...",
+     "to_date": "..."
+   }
+   ```
+
+**Error Handling:**
+- S08 unavailable: HTTP 500 "Core Metrics Service unavailable"
+- PARTNER_NOT_FOUND: HTTP 404 "Partner not found"
+- DB_CONNECTION_ERROR: HTTP 500 "Database connection error"
+
+---
+
+### Flow 2: Customer Satisfaction Rate
+
+**Background Processing (A17a Event Consumer):**
+
+1. **Service Startup - Initial Data Load**:
+   - Call A17b Method API to get current satisfaction distribution from S08
+   - Send RabbitMQ request via queue `s14_s08_requests_queue`
+   - Method: `get_partner_satisfaction_distribution` with this partner's `partner_id`
+   - Wait for response from queue `s14_s08_responses_queue`
+   - Initialize satisfaction counters:
+     - `satisfaction_1`, `satisfaction_2`, `satisfaction_3`, `satisfaction_4`, `satisfaction_5`
+     - `total_ratings`
+   - Calculate and store initial `average_rating`
+   - Handle errors:
+     - "PARTNER_NOT_FOUND": Initialize all counters to 0
+     - "NO_DATA_FOUND": Initialize all counters to 0
+     - "DB_CONNECTION_ERROR": Retry with backoff
+
+2. **Process `conversation_satisfaction_change_by_partner` Event**:
+   - Validate payload: `conversation_id`, `partner_id`, `old_satisfaction`, `new_satisfaction`, `updated_at`
+   - Verify `partner_id` matches this Partner's ID
+   - **Update satisfaction distribution:**
+     - If `old_satisfaction` exists (rating changed): Decrement `satisfaction_[old_value]` counter
+     - Increment `satisfaction_[new_value]` counter (1-5 stars)
+   - Update `total_ratings` count
+   - **Recalculate average rating:**
+     ```
+     average_rating = (1×satisfaction_1 + 2×satisfaction_2 + 3×satisfaction_3 + 4×satisfaction_4 + 5×satisfaction_5) / total_ratings
+     ```
+
+**On-Demand Query (H30.2: `GET /api/v1/partner/metrics/satisfaction-rate`):**
+
+1. **Authenticate Request**: Validate JWT token for Partner Portal
+2. **Validate Query Parameters**: Parse `from_date`, `to_date` (optional)
+3. **Query S08 via A17b Method API** (if date filters specified):
+   - Method: `get_partner_satisfaction_distribution` with `partner_id`
+   - Handle "NO_DATA_FOUND": return HTTP 200 with empty distribution
+4. **Calculate Satisfaction Rate**:
+   ```
+   satisfied_customers = satisfaction_3 + satisfaction_4 + satisfaction_5
+   satisfaction_rate_percentage = (satisfied_customers / total_ratings) × 100
+   ```
+5. **Return Response**: HTTP 200 with:
+   ```json
+   {
+     "status": "success",
+     "total_conversations": N,
+     "satisfaction_distribution": {...},
+     "average_rating": X.XX,
+     "from_date": "...",
+     "to_date": "..."
+   }
+   ```
+
+**Error Handling:**
+- NO_DATA_FOUND: HTTP 200 with empty distribution, average_rating = 0
+- S08 unavailable: HTTP 500 "Core Metrics Service unavailable"
+- PARTNER_NOT_FOUND: HTTP 404 "Partner not found"
+
+---
+
+### Flow 3: Partner Offload Rate
+
+**Background Processing (A17a Event Consumer):**
+
+1. **Service Startup - Initial Data Load**:
+   - Call A17b Method API to get current conversation statistics from S08
+   - Method: `get_partner_conversation_statistics` with `partner_id` (same as Flow 1)
+   - Extract: `total_conversations`, `ai_failed_conversations`, `offloaded_conversations`
+   - Initialize offload metrics:
+     - `ai_failed_conversations` (conversations forwarded to this partner)
+     - `offloaded_conversations` (conversations handled by AI before reaching partner)
+   - Calculate initial `offload_rate_percentage`:
+     ```
+     offload_rate_percentage = (offloaded_conversations / total_conversations) × 100
+     ```
+   - Note: This uses the same initial data load as Flow 1, can be done in parallel
+
+2. **Track Offload Metrics via Events**:
+   - All conversation events include offload status implicitly
+   - When conversation starts (`conversation_start_by_partner`):
+     - This indicates conversation was forwarded to partner (AI failed)
+     - Increment `ai_failed_conversations` counter
+   - Calculate continuously:
+     ```
+     offloaded_conversations = total_conversations_served_by_AI (from partner perspective)
+     offload_rate = (offloaded_conversations / total_conversations) × 100
+     ```
+   - Note: For Partner metrics, "offloaded" means conversations the AI handled successfully before forwarding
+   - Batch persist to database (every 10 seconds OR 100 events)
+
+**On-Demand Query (H30.3: `GET /api/v1/partner/metrics/offload-rate`):**
+
+1. **Authenticate Request**: Validate JWT token for Partner Portal
+2. **Validate Query Parameters**: Parse `from_date`, `to_date` (optional)
+3. **Query S08 via A17b Method API** (if date filters specified):
+   - Method: `get_partner_conversation_statistics` with `partner_id`
+   - Extract: `total_conversations`, `ai_failed_conversations`, `offloaded_conversations`
+4. **Calculate Offload Rate**:
+   ```
+   offload_rate_percentage = (offloaded_conversations / total_conversations) × 100
+   ```
+   - Handle edge case: if `total_conversations` = 0, return `offload_rate_percentage` = 0
+5. **Return Response**: HTTP 200 with:
+   ```json
+   {
+     "status": "success",
+     "total_conversations": N,
+     "ai_failed_conversation": N,
+     "offloaded_conversations": N,
+     "offload_rate_percentage": XX.XX,
+     "from_date": "...",
+     "to_date": "..."
+   }
+   ```
+
+**Error Handling:**
+- S08 unavailable: HTTP 500 "Core Metrics Service unavailable"
+- PARTNER_NOT_FOUND: HTTP 404 "Partner not found"
+
+---
+
+### Critical Error Handling (Applies to All Flows)
+
+**RabbitMQ Connection Lost:**
+- Log error with timestamp
+- Attempt reconnection with exponential backoff (1s, 2s, 4s, 8s, max 60s)
+- Buffer events in memory (max 5,000 events) during disconnection
+- Process buffered events after reconnection
+- Set health endpoint to unhealthy
+
+**Database Connection Lost:**
+- Attempt reconnection (3 attempts, 5s delay)
+- Buffer writes in memory (max 3,000 operations)
+- Return HTTP 503 if buffer full
+- Set health endpoint to unhealthy
 
 
+**S08 Core Metrics Service Unavailable:**
+- Return HTTP 500 with specific error message
+- Implement circuit breaker pattern:
+  - After 5 consecutive failures: open circuit for 30 seconds
+  - After 30s: attempt half-open (single request)
+  - Close circuit if request succeeds
 
+**Invalid Event Payload:**
+- Log validation error with full event details
+- Continue processing other events (do not crash)
+- Increment `invalid_events_counter` metric
+- Alert if invalid_events_counter > 50/hour
 
-
-
+**Partner ID Mismatch:**
+- Ignore events with partner_id not matching this Partner's ID
+- Log warning for debugging purposes
+- Do not increment error counters
 
 ## This Service's APIs
 
-**{{CŨNG_CHỌN_CÁC_FILE_AXX_HOẶC_HXX_THÍCH_HỢP_LINK_VÀO_ĐÂY}}**
+This service exposes the following APIs:
+
+### Event Consumer APIs (Background Processing)
+
+**A17a - Core Metrics Events**
+[A17](../../api_groups/A17a.md) - Consumes real-time events from S08 Core Metrics Service (RabbitMQ)
+  - Event Queue: `s08_events_queue`
+  - Events consumed (filtered by partner_id):
+    - `conversation_start_by_partner`
+    - `conversation_changed_status_by_partner`
+    - `conversation_satisfaction_change_by_partner`
+
+### Method Call APIs (Request/Response via RabbitMQ)
+
+**A17b - Core Metrics Methods**
+[A17](../../api_groups/A17b.md) - Calls S08 to retrieve partner-specific statistics (RabbitMQ)
+  - Request Queue: `s14_s08_requests_queue`
+  - Response Queue: `s14_s08_responses_queue`
+  - Methods used:
+    - `get_partner_conversation_statistics`
+    - `get_partner_satisfaction_distribution`
+### HTTP API for Partner Portal (H30)
+
+[H30](../../api_groups/H30.md) - Exposes metrics data to Partner Portal (HTTP/REST)
+  - **H30.1**: `GET /api/v1/partner/metrics/conversations`
+  - **H30.2**: `GET /api/v1/partner/metrics/satisfaction-rate`
+  - **H30.3**: `GET /api/v1/partner/metrics/offload-rate`
 
 
 
