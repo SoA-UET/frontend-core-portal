@@ -71,18 +71,26 @@ a `.env.example` file for that.
 
 ### Main Flow: Connect to Telcenter Core
 
-1. Admin Telcenter Partner obtains the Core API URL,
-   appropriate Partner ID, and API key. He then enters
+1. Admin Telcenter Partner obtains the Core API URL
+   and API key. He then enters
    all this into a frontend.
 
-2. The frontend calls API H11 to verify the Core connection.
-3. Once verified, the backend (S09) saves the credentials
-   and information input earlier.
+2. The frontend calls API H26 to test the connection
+   to Telcenter Core with the given credentials.
 
-4. Later, S09 would offer the core connection information (API
+3. The backend (S09), upon receiving that H26 request,
+   calls API H11 to verify
+   the connection to Telcenter Core.
+
+4. Once verified, S09 returns `partner_id` to the frontend
+   (obtained from H11).
+
+5. The frontend calls API H25
+   to save the Core connection information,
+   including `core_url`, `api_key`, and `partner_id`.
+
+5. Later, S09 would offer the core connection information (API
    URL, Partner ID and API key) to other services via A12 API.
-
-If it fails at any stage, return the appropriate error response via RabbitMQ.
 
 ## This Service's APIs
 
@@ -127,7 +135,11 @@ Database: `telcenter_partner_partner`
 
 Lưu trữ thông tin kết nối của các Partner telecom. Đây là bảng chính cho việc quản lý partner.
 
-- `id` (ObjectId, Primary Key): Auto-generated
+Bảng này chỉ có một bản ghi duy nhất, đại diện cho chính Partner này.
+
+Các cột:
+
+- `_id` (ObjectId, Primary Key): Auto-generated
 - `partner_id` (string): ID of this partner, assigned by Core
 - `name` (string): Tên nhà mạng (VD: Vinaphone, Viettel)
 - `api_key` (string): API key để xác thực API
