@@ -66,61 +66,69 @@ a `.env.example` file for that.
 
 [A08](../../api_groups/A08.md) - Send validated knowledge to S03 for storage and indexing
 
-### S08 Metrics Service
-
-[A05](../../api_groups/A05.md) - Report validation metrics to S08
-
 ### S12 Partner Knowledge Update Service
 
 [A34](../../api_groups/A34.md) - Receives knowledge validation requests from S12
 
 ## The Flow
 
-### Flow 1: Validate Knowledge from Core Portal (via H22)
+This service supports the following use cases:
 
-1. **Receive Validation Request** (via H22): Core Portal submits a knowledge validation request from Core employees or automated processes
+- TC-05.1: Xem danh sách cập nhật
+- TC-05.2: Duyệt bản cập nhật
+- TC-05.3: Từ chối bản cập nhật
 
-2. **Authenticate Request**: Verify the requesting user's credentials and validation permissions
+Also, it must be able to get update drafts
+from Partner (S12) before displaying them
+to Core employees for approval.
 
-3. **Parse Knowledge Data**: Extract and validate the structure of the knowledge dataframe (telecom service information)
+The above could be easily implemented
+using CRUD pattern via HTTP APIs.
 
-4. **Perform Validation Checks**:
-   - Check for duplicate entries (compare with existing knowledge in S03)
-   - Validate data completeness (all required fields present)
-   - Verify data consistency (pricing, package codes, syntax formats)
-   - Check for conflicting information
-   - Validate Vietnamese language content quality
+The following only lists the non-trivial
+flows.
 
-5. **Send to Knowledge Service** (via A08): If validation passes, forward the validated knowledge to S03 for storage
+### Flow 1: Get an update draft from Partner's S12 (via A34)
 
-6. **Receive Storage Confirmation** (via A08 response): Get acknowledgment that knowledge was stored successfully
+Steps:
 
-7. **Report Metrics** (via A05): Send validation metrics to S08 (success/failure rates, validation time, data quality scores)
+1. **Begin receiving update snapshot:** S05 receives
+   a snapshot transmission initiation event from S12
+   via A34 (`snapshot_start`).
 
-8. **Return Validation Result**: Send validation status back to Core Portal
+2. **Receive data chunks:** S05 receives
+   data chunks via A34 (`snapshot_chunk`), and
+   reassembles them into the full update draft.
 
-### Flow 2: Validate Knowledge from Partner (via A34)
+3. **Complete receiving update snapshot:** S05
+   receives the snapshot transmission completion event
+   from S12 via A34 (`snapshot_stop`).
+   It must also make sure that all chunks have
+   been received by checking the `total_chunks`
+   field in the `snapshot_stop` event.
 
-1. **Receive Validation Request** (via A34): S12 Partner Knowledge Update Service sends a knowledge validation request
+4. **Store draft in SeaweedFS:** S05 stores the
+   reassembled update draft JSON file into SeaweedFS,
+   and records a validation task in its database
+   with status `pending` (see Database Schema below).
 
-2. **Identify Partner Source**: Extract partner identity and context from the request
+### Flow 2: Validate an update draft (from H22)
 
-3. **Perform Validation Checks**: Same validation steps as Flow 1, but with partner-specific rules:
-   - Verify partner is authorized to update specific service types
-   - Check partner-specific data format requirements
-   - Validate against partner's service catalog
+Steps:
 
-4. **Send to Knowledge Service** (via A08): If validation passes, forward the validated knowledge to S03
-
-5. **Receive Storage Confirmation** (via A08 response): Get acknowledgment from S03
-
-6. **Report Metrics** (via A05): Send validation metrics to S08 with partner context
-
-7. **Return Validation Result** (via A34 response): Send validation status back to S12
-
-If it fails at any stage, the whole process fails.
-That is, immediately return error with the
-appropriate error message.
+1. User browses pending update drafts in Core Portal
+   (via H22 list endpoint).
+2. User selects a pending update draft and clicks
+   "Approve" button.
+3. Core Portal calls S05 via H22 approve endpoint
+   to approve that update draft.
+4. S05 calls S03 via A08 to store the validated
+   knowledge into Core knowledge database,
+   specifying the SeaweedFS file ID of the
+   update draft JSON file.
+5. S03 responds with success.
+6. S05 updates the validation task status to
+   `validated` in its database.
 
 ## This Service's APIs
 
@@ -170,16 +178,13 @@ Database: `telcenter_core_s05`
 
 Theo dõi các tác vụ validation và lịch sử.
 
-| Tên trường | Kiểu dữ liệu | Mô tả |
-|------------|--------------|-------|
-| `_id` | ObjectId | Primary key |
-| `seaweed_file_id` | string | ID file JSON trên SeaweedFS (dữ liệu đầu vào) |
-| `partner_id` | string/null | Partner gửi request (null nếu từ Core Portal) |
-| `status` | string | `pending` / `validated` / `rejected` |
-| `validator_id` | string | ID người/service thực hiện validate |
-| `result_message` | string | Thông báo kết quả |
-| `created_at` | datetime | Thời gian tạo |
-| `validated_at` | datetime | Thời gian hoàn thành validate |
+- `_id` (ObjectId, primary key): ID định danh tác vụ
+- `seaweed_file_id` (string): ID file JSON trên SeaweedFS (dữ liệu đầu vào)
+- `partner_id` (string, nullable): Partner gửi request (null nếu từ Core Portal)
+- `status` (string): `pending` / `validated` / `rejected`
+- `validator_id` (string): ID người/service thực hiện validate
+- `created_at` (datetime): Thời gian tạo
+- `validated_at` (datetime, nullable): Thời gian hoàn thành validate (optional)
 
 Sample document:
 
@@ -190,7 +195,6 @@ Sample document:
     "partner_id": "viettel_partner_001",
     "status": "validated",
     "validator_id": "validator_jane",
-    "result_message": "Validated 15 packages, 20 FAQs successfully",
     "created_at": "2025-12-08T10:30:00Z",
     "validated_at": "2025-12-08T10:45:00Z"
 }

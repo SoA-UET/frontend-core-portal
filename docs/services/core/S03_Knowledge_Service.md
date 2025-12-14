@@ -65,31 +65,27 @@ a `.env.example` file for that.
 
 ### S02 Consultant AI Agent
 
-[A01](../../api_groups/A01.md) - Send validated knowledge updates to the AI Agent
+[A01](../../api_groups/A01.md) - Send validated knowledge updates to the AI Agent whenever knowledge is updated
 
 ### S05 Knowledge Validator Service
 
 [A08](../../api_groups/A08.md) - Receives validated knowledge from S05 for storage
 
-### S08 Metrics Service
-
-[A18](../../api_groups/A18.md) - Report knowledge operations metrics to S08
-
-### S11 Partner Local Knowledge Service
-
-S11 may send partner-local metrics to S03 or to the partner's metrics pipeline; partner metrics are not transported via `A08`.
-
 ## The Flow
 
-1. **Receive Validated Knowledge** (via A08): The service receives validated knowledge from S05 Knowledge Validator Service containing telecom service information (packages, pricing, features, etc.)
+### Main Flow: Store Validated Knowledge
 
-2. **Store Knowledge**: Store the validated knowledge in the Knowledge Database (vector database + structured database)
+Steps:
 
-4. **Index for Search**: Update search indices and embeddings for efficient retrieval
-
-5. **Send Metrics** (via A08): Report knowledge update metrics to the Metrics Service
-
-6. **Return Success Response**: Acknowledge the successful update to the requesting service
+1. S05 Knowledge Validator Service sends validated knowledge data
+   to S03 via RabbitMQ (using API A08). The event includes
+   the SeaweedFS file ID where the knowledge data is stored.
+2. S03 retrieves the knowledge data from SeaweedFS using the provided 
+   file ID.
+3. S03 processes the knowledge data and stores it into its
+   internal database (MongoDB).
+4. S03 sends the updated knowledge to S02 Consultant AI Agent
+   via API A01 to update the AI's knowledge base.
 
 If it fails at any stage, the whole process fails.
 That is, immediately return error with the
@@ -100,8 +96,6 @@ appropriate error message.
 This service exposes the following APIs:
 
 - [A08](../../api_groups/A08.md) - Receives validated knowledge from S05 (RabbitMQ)
-  - Request Queue: `knowledge_validator_to_knowledge_requests`
-  - Response Queue: `knowledge_validator_to_knowledge_responses`
 
 ## Technology
 
@@ -130,46 +124,42 @@ This service exposes the following APIs:
 
 - The program entry point is [in this file](../../../app/__main__.py).
 
-- Use ChromaDB or similar vector database for storing knowledge embeddings
-- Use MongoDB for structured telecom service data
-
 ## Database Schema (MongoDB)
-
-Database: `telcenter_core_knowledge`
 
 ### Collection: `packages` (Gói cước)
 
 Lưu thông tin các gói cước viễn thông từ tất cả các Partner.
 
-| Tên trường | Kiểu dữ liệu | Ràng buộc | Mô tả |
-|------------|--------------|-----------|-------|
-| `id` | INT | PK, Auto Increment | ID gói cước |
-| `partner_id` | INT | FK partners | Gói cước thuộc nhà mạng nào |
-| `code` | VARCHAR(50) | Index, Not Null | Mã gói (VD: V120, D500) |
-| `meta_data` | TEXT | NOT NULL | String JSON thông tin gói cước |
+Fields:
+
+- `id` (ObjectId, Primary Key): ID của gói cước
+- `partner_id` (string): ID của partner sở hữu gói cước
+- `Mã dịch vụ` (string): Mã dịch vụ gói cước
+- `Thời gian thanh toán` (string): Hình thức thanh toán (trả trước/trả sau)
+- `Các dịch vụ tiên quyết` (string): Các dịch vụ cần có để đăng ký gói cước
+- `Giá (VNĐ)` (number): Giá gói cước (VNĐ)
+- `Chu kỳ (ngày)` (number): Chu kỳ gói cước (ngày)
+- `4G tốc độ tiêu chuẩn/ngày` (number): Dung lượng 4G tốc độ tiêu chuẩn mỗi ngày (GB)
+- `4G tốc độ cao/ngày` (number): Dung lượng 4G tốc độ cao mỗi ngày (GB)
+- `4G tốc độ tiêu chuẩn/chu kỳ` (number): Dung lượng 4G tốc độ tiêu chuẩn mỗi chu kỳ (GB)
+- `4G tốc độ cao/chu kỳ` (number): Dung lượng 4G tốc độ cao mỗi chu kỳ (GB)
+- `Gọi nội mạng` (string): Thông tin gọi nội mạng
+- `Gọi ngoại mạng` (string): Thông tin gọi ngoại mạng
+- `Tin nhắn` (string): Thông tin tin nhắn
+- `Chi tiết` (string): Thông tin chi tiết gói cước
+- `Tự động gia hạn` (string): Thông tin về tự động gia hạn
+- `Cú pháp đăng ký` (string): Cú pháp đăng ký gói cước
 
 ### Collection: `faqs` (Câu hỏi thường gặp)
 
 Lưu các câu hỏi và câu trả lời từ tất cả các Partner.
 
-| Tên trường | Kiểu dữ liệu | Ràng buộc | Mô tả |
-|------------|--------------|-----------|-------|
-| `id` | INT | PK, Auto Increment | ID câu hỏi |
-| `partner_id` | INT | FK partners | Kiến thức này của nhà mạng nào |
-| `question` | TEXT | Not Null | Nội dung câu hỏi |
-| `answer` | TEXT | Not Null | Nội dung câu trả lời chuẩn |
-| `category` | VARCHAR(50) | Nullable | Phân loại (Kỹ thuật, Cước phí...) |
+Fields:
 
-Sample `packages` document:
-
-```json
-{
-    "id": 1,
-    "partner_id": 1,
-    "code": "SD70",
-    "meta_data": "{\"payment_type\":\"Trả trước\",\"price\":70000,\"cycle_days\":30,\"data_standard_per_day\":1,\"auto_renew\":true,\"registration_syntax\":\"SD70 DK8 gửi 290\"}"
-}
-```
+- `id` (ObjectId, Primary Key): ID của câu hỏi
+- `partner_id` (string): ID của partner sở hữu câu hỏi
+- `question` (string): Nội dung câu hỏi thường gặp
+- `answer` (string): Nội dung câu trả lời chuẩn
 
 Sample `faqs` document:
 
@@ -179,6 +169,5 @@ Sample `faqs` document:
     "partner_id": 1,
     "question": "Làm sao để kiểm tra số dư?",
     "answer": "Bấm *101# để kiểm tra số dư tài khoản.",
-    "category": "Cước phí"
 }
 ```

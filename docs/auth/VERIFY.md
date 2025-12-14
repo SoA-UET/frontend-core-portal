@@ -102,7 +102,7 @@ The following JWT payload claims MUST be validated:
 
 * `exp` — must not be expired
 * `iat` — must be within acceptable skew
-* `sub` — must exist
+* `sub` — user ID - must exist
 * `full_name` — user's full name, string
 * `email` — email address, string
 * `permissions` — optional, array of granted permissions (`Array<string>`).

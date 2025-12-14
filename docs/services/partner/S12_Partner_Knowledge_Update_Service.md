@@ -74,31 +74,57 @@ a `.env.example` file for that.
 
 [A16](../../api_groups/A16.md) - Report knowledge update submission metrics to S14
 
-## The Flow
+## The Flows
 
-### Flow 1: Submit Knowledge Update (from H29)
+This service has the following use cases:
 
-1. **Receive Update Request** (via H29): Partner Portal submits a knowledge update request. Note that the request does not contain the data itself, but triggers a validation of the current local knowledge.
+- TP-14: Tạo bản cập nhật dữ liệu mới (update)
+- TP-15: Xóa bản cập nhật đang ở trạng thái Draft
+- TP-16: Gửi bản cập nhật lên Telcenter Core
 
-2. **Authenticate Request**: Verify the requesting partner employee's credentials and permissions
+### Flow 1: Create Knowledge Update (from H29)
 
-3. **Export Local Knowledge** (via A33): Request S11 to dump the current local knowledge database to a JSON file and upload it to SeaweedFS. S11 returns a `file_id`.
+This corresponds to TP-14.
 
-4. **Send to Core for Validation** (via A34): Send the `file_id` to S05 Knowledge Validator Service in Telcenter Core for validation.
+Steps:
 
-5. **Receive Validation Result** (via A34 response): Get validation status from Core. Note that Core either approves the entire update or rejects it completely (no partial approval).
-
-6. **On Validation Success - Update Local Knowledge** (via A33): If validated successfully, send the approved knowledge (via `file_id`) to S11 to update Partner Local Knowledge DB.
-
-7. **Receive Update Confirmation** (via A33 response): Get acknowledgment from S11 that local knowledge has been updated.
-
-8. **Send Metrics** (via A16): Report update metrics to S14 Partner Metrics Service
-
-9. **Return Status to Portal**: Send final status back to Partner Portal with validation/update results
+1. Partner Portal calls H29 to create a new knowledge update draft.
+2. S12 calls S11 via A33 to snapshot the current local knowledge data
+   into a JSON file stored in SeaweedFS.
+3. S11 returns the SeaweedFS file ID to S12.
+4. S12 creates a new draft update record in its database,
+   referencing the SeaweedFS file ID.
+5. S12 returns the draft update details to Partner Portal.
 
 If it fails at any stage, the whole process fails.
 That is, immediately return error with the
 appropriate error message.
+
+### Flow 2: Delete Draft Update (from H29)
+
+This corresponds to TP-15.
+
+This is trivial. In the Update list in Partner Portal,
+there simply is a "Delete" button for draft updates.
+When clicked, Partner Portal calls H29 to delete
+the draft update. S12 then deletes the draft
+update record from its database.
+
+### Flow 3: Submit Update to Telcenter Core (from H29)
+
+This corresponds to TP-16.
+
+Steps:
+
+1. User in Partner Portal selects a draft update
+   (from a list of available drafts that are
+   created beforehand) and clicks "Submit to Core" button.
+2. Partner Portal calls S12 via H29 to submit that draft update
+   to Telcenter Core for validation.
+3. S12 retrieves the corresponding draft update's details from its database.
+4. S12 calls S05 Knowledge Validator Service (Core) via A34 to submit the update for validation.
+   The update data is fetched from SeaweedFS using the stored file ID,
+   then sent to S05 by chunks (see A34).
 
 ## This Service's APIs
 
