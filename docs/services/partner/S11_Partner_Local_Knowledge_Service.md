@@ -70,57 +70,87 @@ a `.env.example` file for that.
 
 [A33](../../api_groups/A33.md) - Receives knowledge update commands from S12
 
-### S14 Partner Metrics Service
-
-[A15](../../api_groups/A15.md) - Report local knowledge operations metrics to S14
-
 ## The Flow
 
-### Flow 1: Query Knowledge (from H28)
+This service supports the following use cases
+(from the frontend's perspective):
 
-1. **Receive Query Request** (via H28): Partner Portal sends a knowledge query request (search for specific telecom services, pricing, or features)
+- TP-07: Thêm gói cước
+- TP-08: Sửa gói cước
+- TP-09: Xóa gói cước
+- TP-10: Thêm câu hỏi thường gặp (FAQ)
+- TP-11: Sửa FAQ
+- TP-12: Xóa FAQ
+- TP-13a: Tải file dữ liệu kiến thức viễn thông lên hệ thống (import file).
+- TP-13b: Xem trạng thái xử lý file dữ liệu kiến thức viễn thông đã tải lên (danh sách các file imports).
+- TP-13c: Xem chi tiết một file import (bao gồm các gói cước được trích xuất từ file, nếu trích xuất thành công).
+- TP-13d: Sửa thông tin các gói cước được trích xuất từ file import (tại trang chi tiết file import). Bao gồm sửa, thêm, và xóa các gói cước đó.
+- TP-13e: Approve một file import - tức là chấp nhận các gói cước được trích xuất từ file import (tại trang chi tiết file import) để đưa vào cơ sở dữ liệu chính thức của hệ thống.
+- TP-13f: Reject một file import.
 
-2. **Authenticate Request**: Verify the requesting partner employee's credentials
+The CRUD operations for packages and FAQs
+are done through the H28 API from the Partner Portal,
+and are standard CRUD operations (trivial).
 
-3. **Search Local Knowledge Database**: Query the Partner Local Knowledge DB (vector database + structured database) for relevant information
+Below are the non-trivial flows.
 
-4. **Format Response**: Structure the search results with relevant telecom service data
+### Main Flow 1: Import File
 
-5. **Report Metrics** (via A15): Send query metrics to S14 Partner Metrics Service
+Steps:
 
-6. **Return Results**: Send the formatted knowledge back to Partner Portal
+1. Partner Portal frontend calls the H28 API
+    `POST /api/v1/local-knowledge/file-imports`
+    to upload a file to be imported.
 
-### Flow 2: Process File Import (triggered via H28)
+2. S11 stores the uploaded file into SeaweedFS,
+    and creates a new `file_imports` record
+    in its database with status `PENDING`.
 
-1. **Receive File Import Request** (via H28): Partner Portal uploads a file (Excel, PDF, Word) containing telecom service knowledge
+3. S11 sends an `import_file` request
+    to S15 File Importing AI Agent via RabbitMQ
+    (using API A32), providing the SeaweedFS file ID.
+    Use the file import ID as the
+    RPC method request ID.
 
-2. **Validate File**: Check file format, size, and content structure
+4. S11 returns a response to the Partner Portal
+    frontend indicating that the file import
+    request has been accepted, with the
+    corresponding file import ID.
 
-3. **Forward to AI Agent** (via A32): Send the file to S15 File Importing AI Agent for processing. H28 should first store the uploaded file in SeaweedFS and include a `file_reference` (with `storage: "seaweed"` and `file_id`/`file_url`) in the `A32` message to S15. If `file_content_base64` is provided instead, S15 MUST persist it into SeaweedFS and return a `file_reference`.
+### Subthread Flow: Handle File Import Result
 
-4. **Receive Processed Data** (via A32 response): Get structured dataframe from S15 with extracted knowledge
+1. After S15 has received the `import_file` request,
+    it retrieves the file from SeaweedFS
+    using the provided file ID.
+2. S15 processes the file, extracts telecom
+    knowledge, and returns the result to S11
+    via RabbitMQ response (API A32), preserving
+    the RPC method request ID in the response.
+3. S11 receives the response from S15 from the
+    response queue in a separate thread.
+4. S11 updates the corresponding `file_imports`
+    record in its database (by corresponding,
+    matching the file import ID with the RPC
+    method request ID):
+    - If S15 returned success, update status to
+      `EXTRACTED` and store the extracted packages.
+    - If S15 returned error, update status to
+      `FAILED` and store the error message.
 
-5. **Store Temporarily**: Save the extracted knowledge in a temporary staging area awaiting approval
+### Main Flow 2: Approve/Reject File Import
 
-6. **Report Metrics** (via A15): Send file import metrics to S14
+1. Partner Portal frontend calls the H28 API
+    `POST /api/v1/local-knowledge/file-imports/{import_id}/approve`
+    or
+    `POST /api/v1/local-knowledge/file-imports/{import_id}/reject`
+    to approve or reject a file import.
 
-7. **Return Processing Status**: Notify Partner Portal of successful file processing
-
-### Flow 3: Update Knowledge (from S12 via A33)
-
-1. **Receive Knowledge Update** (via A33): S12 sends validated knowledge updates (after Core validation)
-
-2. **Update Local Database**: Store the validated knowledge in Partner Local Knowledge DB
-
-3. **Update Search Indices**: Refresh vector embeddings and search indices for efficient retrieval
-
-4. **Send Metrics** (via A15): Report update metrics to S14 Partner Metrics Service
-
-5. **Return Acknowledgment**: Confirm successful update to S12
-
-If it fails at any stage, the whole process fails.
-That is, immediately return error with the
-appropriate error message.
+2. S11 updates the corresponding `file_imports` record
+    in its database:
+    - If approved, set status to `APPROVED` and
+      insert the extracted packages into
+      the main `packages` collection.
+    - If rejected, set status to `REJECTED`.
 
 ## This Service's APIs
 
@@ -170,44 +200,58 @@ Database: `telcenter_partner_knowledge`
 
 Lưu thông tin các gói cước viễn thông của Partner này.
 
-| Tên trường | Kiểu dữ liệu | Ràng buộc | Mô tả |
-|------------|--------------|-----------|-------|
-| `id` | INT | PK, Auto Increment | ID gói cước |
-| `partner_id` | INT | FK partners | Gói cước thuộc nhà mạng nào |
-| `code` | VARCHAR(50) | Index, Not Null | Mã gói (VD: V120, D500) |
-| `meta_data` | TEXT | NOT NULL | String JSON thông tin gói cước |
+Fields:
+
+- `_id` (ObjectId, Primary Key): ID của gói cước
+- `Mã dịch vụ` (string): Mã dịch vụ gói cước
+- `Thời gian thanh toán` (string): Hình thức thanh toán (trả trước/trả sau)
+- `Các dịch vụ tiên quyết` (string): Các dịch vụ cần có để đăng ký gói cước
+- `Giá (VNĐ)` (number): Giá gói cước (VNĐ)
+- `Chu kỳ (ngày)` (number): Chu kỳ gói cước (ngày)
+- `4G tốc độ tiêu chuẩn/ngày` (number): Dung lượng 4G tốc độ tiêu chuẩn mỗi ngày (GB)
+- `4G tốc độ cao/ngày` (number): Dung lượng 4G tốc độ cao mỗi ngày (GB)
+- `4G tốc độ tiêu chuẩn/chu kỳ` (number): Dung lượng 4G tốc độ tiêu chuẩn mỗi chu kỳ (GB)
+- `4G tốc độ cao/chu kỳ` (number): Dung lượng 4G tốc độ cao mỗi chu kỳ (GB)
+- `Gọi nội mạng` (string): Thông tin gọi nội mạng
+- `Gọi ngoại mạng` (string): Thông tin gọi ngoại mạng
+- `Tin nhắn` (string): Thông tin tin nhắn
+- `Chi tiết` (string): Thông tin chi tiết gói cước
+- `Tự động gia hạn` (string): Thông tin về tự động gia hạn
+- `Cú pháp đăng ký` (string): Cú pháp đăng ký gói cước
 
 ### Collection: `faqs` (Câu hỏi thường gặp local)
 
 Lưu các câu hỏi và câu trả lời của Partner này.
 
-| Tên trường | Kiểu dữ liệu | Ràng buộc | Mô tả |
-|------------|--------------|-----------|-------|
-| `id` | INT | PK, Auto Increment | ID câu hỏi |
-| `partner_id` | INT | FK partners | Kiến thức này của nhà mạng nào |
-| `question` | TEXT | Not Null | Nội dung câu hỏi |
-| `answer` | TEXT | Not Null | Nội dung câu trả lời chuẩn |
-| `category` | VARCHAR(50) | Nullable | Phân loại (Kỹ thuật, Cước phí...) |
+Fields:
 
-Sample `packages` document:
-
-```json
-{
-    "id": 1,
-    "partner_id": 1,
-    "code": "SD70",
-    "meta_data": "{\"payment_type\":\"Trả trước\",\"price\":70000,\"cycle_days\":30,\"data_standard_per_day\":1,\"auto_renew\":true,\"registration_syntax\":\"SD70 DK8 gửi 290\"}"
-}
-```
+- `_id` (ObjectId, Primary Key): ID của câu hỏi
+- `question` (string): Nội dung câu hỏi thường gặp
+- `answer` (string): Nội dung câu trả lời chuẩn
 
 Sample `faqs` document:
 
 ```json
 {
-    "id": 1,
-    "partner_id": 1,
+    "id": "...",
     "question": "Làm sao để kiểm tra số dư?",
-    "answer": "Bấm *101# để kiểm tra số dư tài khoản.",
-    "category": "Cước phí"
+    "answer": "Bấm *101# để kiểm tra số dư tài khoản."
 }
 ```
+
+### Collection: `file_imports` (Lịch sử nhập file)
+
+Lưu thông tin, trạng thái các lần nhập file dữ liệu kiến thức viễn thông.
+
+Fields:
+
+- `_id` (ObjectId, Primary Key): ID của lần nhập file
+- `file_name` (string): Tên file được nhập
+- `seaweed_file_id` (string): ID file trong SeaweedFS
+- `packages` (array of Package): Danh sách các gói cước đã được File Importing AI Agent
+    trích xuất từ file. Định dạng giống như trong collection `packages` (tất nhiên
+    trừ `_id`). Nếu không có gói cước nào được trích xuất hoặc File Importing AI Agent
+    chưa chạy xong, trường này là mảng rỗng.
+- `status` (string): Trạng thái xử lý file. Nhận một trong các giá trị: `PENDING`, `EXTRACTED`, `FAILED`, `APPROVED`, `REJECTED`.
+- `error_message` (string, optional): Thông tin lỗi nếu trạng thái là `FAILED`.
+- `created_at` (datetime): Thời điểm tạo bản ghi import file này.

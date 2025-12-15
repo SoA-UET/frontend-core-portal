@@ -165,9 +165,9 @@ Sample `faqs` document:
 
 ```json
 {
-    "id": 1,
+    "id": "...",
     "partner_id": 1,
     "question": "Làm sao để kiểm tra số dư?",
-    "answer": "Bấm *101# để kiểm tra số dư tài khoản.",
+    "answer": "Bấm *101# để kiểm tra số dư tài khoản."
 }
 ```
