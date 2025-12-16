@@ -54,3 +54,6 @@ htmlcov/
 # Local configuration
 .env.local
 .env.*.local
+/frontend/core-portal/.env
+/frontend/core-portal/.env.*.local
+/frontend/core-portal/node_modules
