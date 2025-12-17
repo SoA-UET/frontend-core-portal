@@ -42,13 +42,13 @@ export interface Employee {
 
 export interface CreateEmployeeRequest {
   full_name: string;
-  role_id: number;
+  role_id: string;
   partner_id?: number | null;
 }
 
 export interface UpdateEmployeeRequest {
   full_name?: string;
-  role_id?: number;
+  role_id?: string;
   status?: 'ACTIVE' | 'INACTIVE' | 'LOCKED';
 }
 

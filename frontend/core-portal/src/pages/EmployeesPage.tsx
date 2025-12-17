@@ -43,10 +43,15 @@ function EmployeesPage() {
   // Form states
   const [formData, setFormData] = useState<CreateEmployeeRequest>({
     full_name: '',
-    role_id: 2, // Default to CONSULTANT role_id
+    role_id: "694025ac0496f58b284da759", // Default ( Nhân viên kiểm duyệt dữ liệu )
   });
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const ROLES = [
+    { id: '694025ac0496f58b284da758', name: 'ADMIN' },
+    { id: '694025ac0496f58b284da759', name: 'Nhân viên kiểm duyệt dữ liệu' },
+  ];
 
   const fetchEmployees = async () => {
     setIsLoading(true);
@@ -73,7 +78,7 @@ function EmployeesPage() {
     try {
       await employeeService.createEmployee(formData);
       setIsCreateModalOpen(false);
-      setFormData({ full_name: '', email: '', role: 'CONSULTANT' });
+      setFormData({ full_name: '', role_id: '694025ac0496f58b284da759' });
       fetchEmployees();
     } catch (err: unknown) {
       const error = err as { response?: { data?: { message?: string } } };
@@ -121,15 +126,13 @@ function EmployeesPage() {
 
   const openEditModal = (employee: Employee) => {
     setSelectedEmployee(employee);
-    // Map role string to role_id (basic mapping - adjust if backend provides role_id)
-    const roleIdMap: Record<string, number> = {
-      ADMIN: 1,
-      CONSULTANT: 2,
-      VALIDATOR: 3,
-    };
+    // Try to match employee role string with ROLES name
+    const matched = ROLES.find((r) => 
+      r.name.toLowerCase().includes(employee.role?.toLowerCase() || '')
+    );
     setFormData({
       full_name: employee.full_name,
-      role_id: roleIdMap[employee.role] || 2,
+      role_id: matched ? matched.id : ROLES[1].id,
     });
     setIsEditModalOpen(true);
   };
@@ -161,7 +164,7 @@ function EmployeesPage() {
         </div>
         <button
           onClick={() => {
-            setFormData({ full_name: '', role_id: 2 });
+            setFormData({ full_name: '', role_id: '694025ac0496f58b284da759' });
             setIsCreateModalOpen(true);
           }}
           className="btn btn-primary"
@@ -262,11 +265,11 @@ function EmployeesPage() {
             <label className="block text-sm font-medium text-text-main mb-2">Vai trò</label>
             <select
               value={formData.role_id}
-              onChange={(e) => setFormData({ ...formData, role_id: Number(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, role_id: e.target.value })}
             >
-              <option value={1}>Quản trị viên</option>
-              <option value={2}>Tư vấn viên</option>
-              <option value={3}>Người xác thực</option>
+              {ROLES.map((role) => (
+                <option key={role.id} value={role.id}>{role.name}</option>
+              ))}
             </select>
           </div>
           <div className="flex justify-end gap-3">
@@ -309,11 +312,11 @@ function EmployeesPage() {
             <label className="block text-sm font-medium text-text-main mb-2">Vai trò</label>
             <select
               value={formData.role_id}
-              onChange={(e) => setFormData({ ...formData, role_id: Number(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, role_id: e.target.value })}
             >
-              <option value={1}>Quản trị viên</option>
-              <option value={2}>Tư vấn viên</option>
-              <option value={3}>Người xác thực</option>
+              {ROLES.map((role) => (
+                <option key={role.id} value={role.id}>{role.name}</option>
+              ))}
             </select>
           </div>
           <div className="flex justify-end gap-3">
