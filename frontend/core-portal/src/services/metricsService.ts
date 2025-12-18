@@ -21,7 +21,7 @@ export const metricsService = {
    */
   async getTotalUsers(params?: DateRangeParams): Promise<TotalUsersMetrics> {
     // REAL API CALL
-    const response = await apiClient.get(`${METRICS_BASE}/metrics/users/total`, { params });
+    const response = await apiClient.get(`${METRICS_BASE}/core/metrics/users/total`, { params });
     return response.data;
   },
 
